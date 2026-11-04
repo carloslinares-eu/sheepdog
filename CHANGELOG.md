@@ -10,3 +10,4 @@ Release tags are named `sheepdog-X.Y.Z`.
 ### Added
 - Development setup for Windows (MinGW toolchain) and carbon: `docs/DEVELOPMENT.md` and `scripts/check-env.ps1` (0.1-T1).
 - Repo bootstrap: CMake targets (`sheepdog_core`, `sheepdog-cli`, a `sheepdog` GUI stub, Catch2 tests), CMake presets, vcpkg manifest, git-describe versioning, Windows manifest and version resource, build and test scripts, and the docs skeleton (0.1-T2).
+- Linux test container (`docker/ci.Dockerfile`, `compose.yaml` with test, asan, tsan, tidy and shell services), `scripts/linux-test.ps1` to run them on carbon, and a GitHub Actions CI skeleton with a Windows MinGW job and a Linux container job (0.1-T3).

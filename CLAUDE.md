@@ -27,7 +27,9 @@ scripts\test.ps1 -Preset win-ci        # -Werror, as CI
 - Catch2 tags are ctest labels: `unit fs gui fault slow win linux`. GUI tests run offscreen.
 - Linux: build and test only inside containers on `ssh carbon` (Debian 13, 4 CPUs, no cmake/Qt on
   the host), in `~/Workspace/sheepdog`. Copy the tree with tar to a temp file + scp; never pipe binary
-  data through PowerShell. `scripts/linux-test.ps1 <service>` arrives with 0.1-T3.
+  data through PowerShell. `scripts\linux-test.ps1 [test|asan|tsan|tidy]` does all that and runs the
+  compose service (`compose.yaml`, image `docker/ci.Dockerfile`: GCC 14, Clang 19, Qt 6.8); full log in
+  `~/Workspace/sheepdog-<service>.log` on carbon.
 
 ## Code map
 
@@ -38,7 +40,9 @@ scripts\test.ps1 -Preset win-ci        # -Werror, as CI
 | `src/gui/` | `sheepdog_gui` lib + `sheepdog` exe | `gui::MainWindow` |
 | `tests/` | Catch2 tests (`sheepdog_tests`, `sheepdog_gui_tests`) | |
 | `cmake/` | warnings, sanitizers, git version, Windows rc + manifest | |
-| `scripts/` | build, test, env, check-env (PowerShell 5.1) | |
+| `scripts/` | build, test, env, check-env, linux-test (PowerShell 5.1) | |
+| `docker/`, `compose.yaml` | Linux CI image and services (run on carbon) | |
+| `.github/workflows/` | CI: Windows MinGW job + Linux container job | |
 
 ## Conventions
 

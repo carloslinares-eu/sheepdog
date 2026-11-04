@@ -121,12 +121,13 @@ The `docker compose run ...` commands in the task cards run on carbon, through `
     - scripts/test.ps1 configures win-debug, builds, and passes a sample Catch2 test
     - `sheepdog-cli --version` prints a git-describe version such as 0.0.0-3-gabc1234, and the empty main window shows it in the title bar
     - after a CLion build, `git status` lists no .idea, build or user-preset files
-- [ ] **0.1-T3 Linux test container and CI skeleton** (M; effort medium; after: 0.1-T2)
+- [x] **0.1-T3 Linux test container and CI skeleton** (M; effort medium; after: 0.1-T2)
   - Scope: In: docker/ci.Dockerfile (debian:13, GCC 14, Clang 19, gdb, Qt 6.8.2 development packages with the offscreen plugin, vcpkg, a non-root user); compose.yaml (services test, asan, tsan, tidy, shell; named volumes for builds and the vcpkg cache; a tmpfs at /mnt/xdev); scripts/linux-test.ps1 (copy the working tree to carbon and run a compose service there); .github/workflows/ci.yml (a windows-2025 MinGW job and a Linux job running the container); Qt and vcpkg caching; actions pinned by SHA; an offscreen GUI smoke test. Out: nightly and release workflows.
   - Done when:
     - `scripts/linux-test.ps1 test` passes on carbon, including the offscreen GUI smoke test
     - CI passes on the Windows and Linux jobs with warnings treated as errors
     - a re-run with warm caches finishes in under 10 minutes
+  - Status 2026-11-04: `linux-test.ps1 test` and `asan` pass on carbon, also with warnings as errors. The GitHub CI run and its warm-cache timing are still open: the repo has no GitHub remote yet.
 - [ ] **0.1-T4 Platform layer: read side** (M; effort high; after: 0.1-T3)
   - Scope: In: the Result<T> error type; path codec (WTF-8 on Windows, raw bytes on Linux, plus a display string); sorted folder listing that never follows symlinks, junctions or reparse points; file details (size, mtime_ns, creation time, attributes, a flag for cloud-only placeholders); file identity (FILE_ID_INFO + volume serial on Windows; st_dev/st_ino + filesystem UUID on Linux); volume info (ID, label, filesystem type, case-sensitivity probe, HDD or SSD); long Windows paths (the \\?\ prefix). Out: every write operation.
   - Done when:

@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Must match builtin-baseline in vcpkg.json and VCPKG_COMMIT in docker/ci.Dockerfile.
+  VCPKG_COMMIT: 9a5dfef5d1a0438a7d24856a85bd60f309d355e9
+
+jobs:
+  windows:
+    name: Windows (MinGW 13.1, Qt 6.12)
+    runs-on: windows-2025
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}\..\vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\..\vcpkg-cache
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # git describe needs history and tags
+
+      - name: Install Qt 6.12 (MinGW kit, MinGW 13.1, CMake, Ninja)
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
+        with:
+          version: 6.12.0
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          dir: ${{ runner.temp }}
+          tools: tools_mingw1310 tools_cmake tools_ninja
+          cache: true
+
+      - name: Point the build scripts at the CI Qt
+        shell: pwsh
+        run: |
+          "SHEEPDOG_QT_DIR=$env:QT_ROOT_DIR" >> $env:GITHUB_ENV
+          "SHEEPDOG_QT_TOOLS=${{ runner.temp }}\Qt\Tools" >> $env:GITHUB_ENV
+
+      - name: vcpkg at the pinned commit
+        shell: pwsh
+        run: |
+          git clone --filter=blob:none https://github.com/microsoft/vcpkg.git $env:VCPKG_ROOT
+          git -C $env:VCPKG_ROOT checkout -q $env:VCPKG_COMMIT
+          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+
+      - name: Restore the vcpkg binary cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}\..\vcpkg-cache
+          key: vcpkg-x64-mingw-static-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+
+      - name: Build and test (warnings as errors, offscreen GUI tests)
+        shell: powershell
+        run: scripts\test.ps1 -Preset win-ci
+
+  linux:
+    name: Linux (Debian 13 container, GCC 14 + Clang 19, Qt 6.8)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Restore the vcpkg binary cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/vcpkg-cache
+          key: vcpkg-x64-linux-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+
+      - name: Build the CI image
+        run: docker compose build --build-arg UID=$(id -u) --build-arg GID=$(id -g) test
+
+      - name: Debug build + tests (warnings as errors)
+        run: |
+          mkdir -p "$RUNNER_TEMP/vcpkg-cache"
+          docker compose run --rm -T -e CMAKE_EXTRA=-DWARNINGS_AS_ERRORS=ON \
+            -v "$RUNNER_TEMP/vcpkg-cache:/vcpkg-cache" test
+
+      - name: ASan + UBSan (Clang)
+        run: |
+          docker compose run --rm -T -e CMAKE_EXTRA=-DWARNINGS_AS_ERRORS=ON \
+            -v "$RUNNER_TEMP/vcpkg-cache:/vcpkg-cache" asan

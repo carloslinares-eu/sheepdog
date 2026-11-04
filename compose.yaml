@@ -1,0 +1,40 @@
+# Linux containers for tests and analysis. Runs on carbon: scripts/linux-test.ps1 <service>.
+# The source is mounted read-only; builds and the vcpkg binary cache live in named volumes;
+# /mnt/xdev is a tmpfs, i.e. a second device for real cross-device moves.
+
+x-ci: &ci
+  image: sheepdog-ci:dev
+  build:
+    context: .
+    dockerfile: docker/ci.Dockerfile
+  volumes:
+    - .:/src:ro
+    - build:/build
+    - vcpkg-cache:/vcpkg-cache
+  tmpfs:
+    - /mnt/xdev:mode=1777
+  environment:
+    JOBS: "4"
+
+services:
+  test:
+    <<: *ci
+    command: ["run-preset", "linux-debug"]
+  asan:
+    <<: *ci
+    command: ["run-preset", "linux-asan"]
+  tsan:
+    <<: *ci
+    command: ["run-preset", "linux-tsan"]
+  tidy:
+    <<: *ci
+    command: ["sh", "-c", "run-preset linux-debug -L none >/dev/null; run-clang-tidy -quiet -p /build/linux-debug '/src/src/.*'"]
+  shell:
+    <<: *ci
+    command: ["bash"]
+    stdin_open: true
+    tty: true
+
+volumes:
+  build:
+  vcpkg-cache:

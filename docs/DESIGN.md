@@ -412,7 +412,7 @@ file_fts USING fts5(display, meta_text)
 - `fstests`: privileged; vfat, exFAT and ntfs3 disk images; run nightly or by hand.
 - `appimage`: Release build with Qt 6.12 and `ctest`, producing `dist/Sheepdog-X.Y.Z-x86_64.AppImage` plus a CLI `.tar.gz`; `smoke-debian12` and `smoke-fedora` then run it with `--appimage-extract-and-run --selftest`.
 
-**Getting the code to carbon.** `scripts/linux-test.ps1 <service>` packs the working tree with tar (no build folders), sends it with scp to `~/src/sheepdog` on carbon, runs `docker compose run --rm <service>` there and prints only the summary. Don't pipe tar into ssh in Windows PowerShell 5.1: its pipeline corrupts binary data. Claude uses the same script, so uncommitted work can be tested on Linux without pushing. carbon has 4 cores and 8 GB RAM: build with `-j4` and run the fuzz, TSan and AppImage jobs one at a time.
+**Getting the code to carbon.** `scripts/linux-test.ps1 <service>` packs the working tree with tar (no build folders), sends it with scp to `~/Workspace/sheepdog` on carbon, runs `docker compose run --rm <service>` there and prints only the summary. Don't pipe tar into ssh in Windows PowerShell 5.1: its pipeline corrupts binary data. Claude uses the same script, so uncommitted work can be tested on Linux without pushing. carbon has 4 cores and 8 GB RAM: build with `-j4` and run the fuzz, TSan and AppImage jobs one at a time.
 
 **CLion.** Whole test suites go through the script. To step through a Linux-only failure, add a Remote Host toolchain (SSH to carbon). It builds on carbon itself, so it needs `sudo apt install cmake ninja-build gdb qt6-base-dev` there first. Set it up only when you need it.
 

@@ -106,7 +106,7 @@ Host carbon
 
 Uncommitted work is tested without pushing: the working tree is packed with `tar` into a temporary
 file (excluding `.git`, `build*` and `cmake-build-*`), copied with `scp` to carbon and unpacked into
-`~/src/sheepdog`. Never pipe tar through ssh in Windows PowerShell 5.1: its pipeline corrupts binary
+`~/Workspace/sheepdog`. Never pipe tar through ssh in Windows PowerShell 5.1: its pipeline corrupts binary
 data. From task 0.1-T3, `scripts\linux-test.ps1 <service>` does this and then runs
 `docker compose run --rm <service>` from `compose.yaml` with the image `docker/ci.Dockerfile`
 (services `test`, `asan`, `tsan`, `tidy`, `shell`). Build with `-j4` and run the heavy jobs (TSan,

@@ -394,7 +394,7 @@ file_fts USING fts5(display, meta_text)
 - `THIRD_PARTY_LICENSES` holds the Qt licence texts with a source link and a TagLib source link, and the About dialog shows it.
 - There is no single-file exe as with Bloodhound, because LGPL Qt has to stay replaceable; a portable zip takes its place.
 
-**Signing.** Builds are unsigned, so Windows SmartScreen shows a warning; this is documented. Code signing is an open question.
+**Signing.** Builds up to v0.9 are unsigned, so Windows SmartScreen shows a warning; this is documented. From 0.9-T2 the Windows files are signed through a free open-source signing programme (SignPath Foundation or similar), applied for once v0.1.0 is public. Linux ships an AppImage, a .deb for Debian 13 and a Flatpak bundle.
 
 
 ## Docker and the Linux host (carbon)
@@ -429,7 +429,7 @@ file_fts USING fts5(display, meta_text)
 ## Risks
 
 - **Data loss while moving files, from an executor bug, a crash or a power cut**  
-  Mitigation: Copy mode ships first (v0.2); moves arrive in v0.4 and stay beta until 1.0. The journal is written before the disk is touched, renames never overwrite, and a source is deleted only after its copy is verified. FaultyFs crash-at-every-call tests and kill tests cover the executor, a sandbox guard limits every Claude session, and 0.9-T2 runs a trial on a copy of real data with a Bloodhound cross-check.
+  Mitigation: Copy mode ships first (v0.2); moves arrive in v0.4 and stay beta until 1.0. The journal is written before the disk is touched, renames never overwrite, and a source is deleted only after its copy is verified. FaultyFs crash-at-every-call tests and kill tests cover the executor, a sandbox guard limits every Claude session, and 0.9-T3 runs a trial on a copy of real data with a Bloodhound cross-check.
 - **Losing the catalog, and with it the manual tags**  
   Mitigation: WAL mode; sqlite3_backup before every migration and organise batch (10 copies kept); manual tags exported to JSON on exit; integrity_check on open; the catalog is refused on network drives.
 - **Malformed files crash the in-house parsers**  
@@ -449,7 +449,7 @@ file_fts USING fts5(display, meta_text)
 - **Licence compliance slips (LGPL for Qt, MPL for TagLib)**  
   Mitigation: Qt is only ever linked dynamically. The release workflow checks THIRD_PARTY_LICENSES, the About dialog shows it, and every release carries source links for Qt and TagLib.
 - **Unsigned binaries trigger SmartScreen and antivirus false positives**  
-  Mitigation: Document the warning, publish SHA256SUMS, and consider code signing after 1.0.
+  Mitigation: Document the warning, publish SHA256SUMS, and sign through a free open-source signing programme from 0.9-T2; if it is not approved in time, 1.0 ships unsigned.
 
 ## Facts still to verify
 

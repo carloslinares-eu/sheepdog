@@ -7,14 +7,22 @@ Created 2026-10-31. This file is the single source of truth for the work: change
 
 ## Decisions needed before 0.1-T2
 
-- [ ] Which files matter most: photos (HEIC/RAW), phone videos, music or documents? The answer sets the order within v0.5 and how much thumbnail work is worth it.
-- [ ] Roughly how many files (100k or several million), and where are they stored: internal SSD/HDD, external drives, NAS/SMB, OneDrive? The catalog itself has to stay on a local disk.
-- [ ] Should tags belong to each file record (the default), or to the content, so that duplicates share their tags automatically?
-- [ ] One central catalog (the default), or an optional portable catalog on each external drive?
-- [ ] If move mode needs more hardening, are copy mode and smart folders enough for 1.0?
-- [ ] Are the name Sheepdog, the MIT licence and an English + German UI OK?
-- [ ] Do you want code signing (a free open-source signing programme or a paid certificate), and Linux formats beyond AppImage (Flatpak, .deb)?
-- [ ] Should tags ever leave the catalog? Recommendation: XMP sidecars and user.xdg.tags as opt-in exports after 1.0, and never writing into the files themselves.
+- [x] Which files matter most: photos (HEIC/RAW), phone videos, music or documents? The answer sets the order within v0.5 and how much thumbnail work is worth it.
+  **Answer (2026-11-04):** mostly documents and photos. The thumbnail work in v0.7 stays. v0.5 is reordered to photos and videos (0.5-T1), then documents with XMP/IPTC keywords (0.5-T2), then audio (0.5-T3).
+- [x] Roughly how many files (100k or several million), and where are they stored: internal SSD/HDD, external drives, NAS/SMB, OneDrive? The catalog itself has to stay on a local disk.
+  **Answer (2026-11-04):** around 100k files. The 100k criteria stay, and the 1M test in v0.8 stays as headroom. Stored on internal disks and external drives (no NAS/SMB or OneDrive), so offline volumes matter more than network shares.
+- [x] Should tags belong to each file record (the default), or to the content, so that duplicates share their tags automatically?
+  **Answer (2026-11-04):** to each file record (the default).
+- [x] One central catalog (the default), or an optional portable catalog on each external drive?
+  **Answer (2026-11-04):** one central catalog (the default).
+- [x] If move mode needs more hardening, are copy mode and smart folders enough for 1.0?
+  **Answer (2026-11-04):** yes.
+- [x] Are the name Sheepdog, the MIT licence and an English + German UI OK?
+  **Answer (2026-11-04):** yes.
+- [x] Do you want code signing (a free open-source signing programme or a paid certificate), and Linux formats beyond AppImage (Flatpak, .deb)?
+  **Answer (2026-11-04):** a free open-source signing programme (for example the SignPath Foundation; apply once v0.1.0 is public), and yes to Flatpak and .deb. Both go into 1.0: new task 0.9-T2.
+- [x] Should tags ever leave the catalog? Recommendation: XMP sidecars and user.xdg.tags as opt-in exports after 1.0, and never writing into the files themselves.
+  **Answer (2026-11-04):** follow the recommendation.
 
 ## How to work through this plan
 
@@ -40,7 +48,7 @@ Created 2026-10-31. This file is the single source of truth for the work: change
 **Effort levels**
 - *medium* for GUI wiring, packaging and docs.
 - *high* for parsers, planner, executor, rename/move detection, the query language and performance.
-- *ultracode* only for 0.9-T2.
+- *ultracode* only for 0.9-T3.
 - A `/code-review high` of `exec/` and `platform/` at the end of v0.2 and of v0.4 is worth the tokens, because those are the modules that could lose data.
 - Use **plan mode** for high-effort tasks, so you agree on the approach before any code is written.
 
@@ -93,8 +101,8 @@ This is **task 0.1-T1**. You do the installs yourself (about an hour); Claude th
 | v0.6.0 | Reconcile and drives | Files renamed or moved in Explorer keep their tags, unplugged drives show as offline, a Missing view relinks files, and a Duplicates view groups identical files and syncs their tags. | 2 (0 S, 2 M) |
 | v0.7.0 | Visual browsing | A zoomable thumbnail grid, a German translation, and a first-run wizard that gets a new user to a preview in minutes. | 2 (0 S, 2 M) |
 | v0.8.0 | Scale and beta hardening | A library of 1M files stays responsive, and the beta has no known high-severity bugs. | 2 (0 S, 2 M) |
-| v0.9.0 | Release candidate | A Windows installer with an icon, a complete user guide, and a release candidate tested on a copy of real data. | 2 (0 S, 2 M) |
-| v1.0.0 | Sheepdog 1.0 | sheepdog-1.0.0 on GitHub with installer, portable zip, AppImage and checksums; catalogs from every beta upgrade cleanly. | 1 (1 S, 0 M) |
+| v0.9.0 | Release candidate | A Windows installer with an icon, signed Windows files, .deb and Flatpak packages, a complete user guide, and a release candidate tested on a copy of real data. | 3 (0 S, 3 M) |
+| v1.0.0 | Sheepdog 1.0 | sheepdog-1.0.0 on GitHub with a signed installer, portable zip, AppImage, .deb, Flatpak bundle and checksums; catalogs from every beta upgrade cleanly. | 1 (1 S, 0 M) |
 
 Total: 39 tasks. S = up to about 300 changed lines, M = about 300-800; nothing bigger, so split a task that grows.
 
@@ -309,18 +317,18 @@ The `docker compose run ...` commands in the task cards run on carbon, through `
     - the generated test files pass, and a 10-minute fuzz run finds nothing
     - an MP4's UTC creation time is shown as local time, and in HEIC files the EXIF date wins over the QuickTime date
     - a layout for phone videos plans the expected year and month paths
-- [ ] **0.5-T2 Audio tags and XMP/IPTC keywords** (M; effort medium; after: 0.3-T3)
-  - Scope: In: TagLib 2 via vcpkg (static, with an MPL-1.1 notice) for MP3, FLAC, Ogg, Opus, M4A, WAV, AIFF and WMA; XMP via pugixml from JPEG APP1, PNG iTXt and sidecar files; IPTC-IIM keywords; keywords imported as Imported/...; default rules Music/Artist and Rating. Out: writing tags into files.
-  - Done when:
-    - audio test files (ID3v2.3, ID3v2.4 in UTF-16, FLAC, Ogg, M4A) give the expected fields
-    - Lightroom hierarchical keywords appear under Imported/
-    - the music layout {audio.artist|Unknown}/{audio.album|Unknown}/... plans the expected paths
-- [ ] **0.5-T3 Documents: Office, ODF, EPUB and PDF** (M; effort medium; after: 0.5-T1, 0.5-T2)
-  - Scope: In: miniz + pugixml reading docProps/core.xml, meta.xml and content.opf; an in-house PDF reader for the Info dictionary and the XMP packet (FlateDecode via miniz; encrypted files skipped); fuzz targets. Out: indexing the full text of documents.
+- [ ] **0.5-T2 Documents (Office, ODF, EPUB, PDF) and XMP/IPTC keywords** (M; effort medium; after: 0.5-T1, 0.3-T3)
+  - Scope: In: miniz + pugixml reading docProps/core.xml, meta.xml and content.opf; an in-house PDF reader for the Info dictionary and the XMP packet (FlateDecode via miniz; encrypted files skipped); XMP via pugixml from JPEG APP1, PNG iTXt and sidecar files; IPTC-IIM keywords; keywords imported as Imported/...; default rule Rating; fuzz targets. Out: indexing the full text of documents; writing tags into files.
   - Done when:
     - document test files give the expected title, author and dates
+    - Lightroom hierarchical keywords appear under Imported/
     - 10-minute fuzz runs of the ZIP and PDF readers find nothing
     - the layout Documents/{doc.created:%Y}/... plans the expected paths
+- [ ] **0.5-T3 Audio tags** (M; effort medium; after: 0.5-T2)
+  - Scope: In: TagLib 2 via vcpkg (static, with an MPL-1.1 notice) for MP3, FLAC, Ogg, Opus, M4A, WAV, AIFF and WMA; default rule Music/Artist. Out: writing tags into files.
+  - Done when:
+    - audio test files (ID3v2.3, ID3v2.4 in UTF-16, FLAC, Ogg, M4A) give the expected fields
+    - the music layout {audio.artist|Unknown}/{audio.album|Unknown}/... plans the expected paths
     - v0.5.0 released with CHANGELOG, a USER_GUIDE field reference, tag and GitHub release
 
 ### v0.6.0 Reconcile and drives
@@ -381,16 +389,22 @@ The `docker compose run ...` commands in the task cards run on carbon, through `
 
 ### v0.9.0 Release candidate
 
-**Goal:** An installer, an icon, complete docs, an independent safety review and a trial on real data.  
-**You get:** A Windows installer with an icon, a complete user guide, and a release candidate tested on a copy of real data.
+**Goal:** An installer, an icon, code signing, Linux packages, complete docs, an independent safety review and a trial on real data.  
+**You get:** A Windows installer with an icon, signed Windows files, .deb and Flatpak packages, a complete user guide, and a release candidate tested on a copy of real data.
 
 - [ ] **0.9-T1 Installer, icon and docs** (M; effort medium; after: 0.8-T2)
-  - Scope: In: a per-user Inno Setup installer; an icon drawn by a Python standard-library script (SVG, PNG, ICO); an About dialog listing every licence; a complete USER_GUIDE (safety model, undo, recovery, reference for queries, templates and rules), ARCHITECTURE and CONTRIBUTING. Out: code signing.
+  - Scope: In: a per-user Inno Setup installer; an icon drawn by a Python standard-library script (SVG, PNG, ICO); an About dialog listing every licence; a complete USER_GUIDE (safety model, undo, recovery, reference for queries, templates and rules), ARCHITECTURE and CONTRIBUTING. Out: code signing and Linux packages (0.9-T2).
   - Done when:
     - installing and uninstalling in Windows Sandbox leaves only user data behind
     - About lists every dependency's licence, with source links for Qt and TagLib
     - every query, template and rule element has a documented example
-- [ ] **0.9-T2 Independent safety review and real-data trial** (M; effort ultracode; after: 0.9-T1)
+- [ ] **0.9-T2 Code signing, .deb and Flatpak** (M; effort medium; after: 0.9-T1)
+  - Scope: In: signing sheepdog.exe, sheepdog-cli.exe and the installer in release.yml through the free open-source signing programme applied for after v0.1.0 (SignPath Foundation or similar); a .deb for Debian 13 built against the system Qt 6.8 (compose service deb, dpkg-deb, lintian); a Flatpak manifest on the KDE runtime with a single-file .flatpak bundle (compose service flatpak); smoke services that install each package and run --selftest; SHA256SUMS covering the new files; USER_GUIDE install notes. Out: Flathub submission and an apt repository (after 1.0).
+  - Done when:
+    - the release files from a test tag carry a valid Authenticode signature (Get-AuthenticodeSignature reports Valid); if the programme has not approved the project yet, the plan records why and 1.0 ships unsigned
+    - the .deb installs in debian:13, passes lintian without errors and its --selftest passes
+    - the Flatpak bundle installs and its --selftest passes; if Flatpak cannot build inside a container on carbon, the plan records the alternative used
+- [ ] **0.9-T3 Independent safety review and real-data trial** (M; effort ultracode; after: 0.9-T2)
   - Scope: In: a fresh-eyes review (/code-review at high or ultra) of platform/FsOps, exec, recovery, the planner and name cleaning; a coverage report for the fault-injection paths; fixes for high-severity findings; you run scripts/trial.ps1 on a COPY of a real library (Claude never does this). Out: new features.
   - Done when:
     - every high-severity finding is fixed, or recorded with a reason
@@ -401,13 +415,13 @@ The `docker compose run ...` commands in the task cards run on carbon, through `
 ### v1.0.0 Sheepdog 1.0
 
 **Goal:** A published 1.0 that upgrades safely and is fully documented.  
-**You get:** sheepdog-1.0.0 on GitHub with installer, portable zip, AppImage and checksums; catalogs from every beta upgrade cleanly.
+**You get:** sheepdog-1.0.0 on GitHub with a signed installer, portable zip, AppImage, .deb, Flatpak bundle and checksums; catalogs from every beta upgrade cleanly.
 
-- [ ] **1.0-T1 Upgrade tests and the 1.0 release** (S; effort medium; after: 0.9-T2)
+- [ ] **1.0-T1 Upgrade tests and the 1.0 release** (S; effort medium; after: 0.9-T3)
   - Scope: In: migration tests from every saved 0.x catalog, release-candidate fixes, a final docs pass, tag sheepdog-1.0.0. Out: new features (they go on the post-1.0 list in RELEASE_PLAN.md).
   - Done when:
     - catalogs from every 0.x milestone upgrade and pass integrity_check
-    - the release files pass smoke tests in Windows Sandbox, Debian 12 and Fedora
+    - the release files pass smoke tests in Windows Sandbox, Debian 12, Debian 13 (.deb), Fedora and the Flatpak bundle
     - sheepdog-1.0.0 is published with CHANGELOG notes and SHA256SUMS
 
 ## After 1.0
@@ -417,4 +431,4 @@ The `docker compose run ...` commands in the task cards run on carbon, through `
 - MKV, WebM and AVI metadata; place names from GPS; HEIC and RAW thumbnails on Linux
 - Face or place recognition
 - A headless `sheepdog-cli` image or NAS mode
-- Code signing; Flatpak or .deb packages
+- Flathub submission and an apt repository

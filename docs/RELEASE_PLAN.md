@@ -127,7 +127,7 @@ The `docker compose run ...` commands in the task cards run on carbon, through `
     - `scripts/linux-test.ps1 test` passes on carbon, including the offscreen GUI smoke test
     - CI passes on the Windows and Linux jobs with warnings treated as errors
     - a re-run with warm caches finishes in under 10 minutes
-  - Status 2026-11-04: `linux-test.ps1 test` and `asan` pass on carbon, also with warnings as errors. The GitHub CI run and its warm-cache timing are still open: the repo has no GitHub remote yet.
+  - Status 2026-11-04: `linux-test.ps1 test` and `asan` pass on carbon, also with warnings as errors. GitHub CI run 41894649584 passed: Linux 1 min 22 s, Windows 6 min with cold Qt and vcpkg caches. Windows CI uses Qt 6.10.3 because aqtinstall 3.3 cannot install Qt 6.11+.
 - [ ] **0.1-T4 Platform layer: read side** (M; effort high; after: 0.1-T3)
   - Scope: In: the Result<T> error type; path codec (WTF-8 on Windows, raw bytes on Linux, plus a display string); sorted folder listing that never follows symlinks, junctions or reparse points; file details (size, mtime_ns, creation time, attributes, a flag for cloud-only placeholders); file identity (FILE_ID_INFO + volume serial on Windows; st_dev/st_ino + filesystem UUID on Linux); volume info (ID, label, filesystem type, case-sensitivity probe, HDD or SSD); long Windows paths (the \\?\ prefix). Out: every write operation.
   - Done when:

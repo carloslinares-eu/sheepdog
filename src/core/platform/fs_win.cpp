@@ -144,6 +144,17 @@ Result<FileDetails> file_details(const NativePath& path) {
     return details_of_handle(h.get(), path);
 }
 
+Result<void> remove_app_file(const NativePath& path) {
+    auto wide = win32_path(path);
+    if (!wide) {
+        return wide.error();
+    }
+    if (::DeleteFileW(wide->c_str()) == 0) {
+        return last_error(path);
+    }
+    return Ok{};
+}
+
 Result<std::vector<DirEntry>> list_dir(const NativePath& dir) {
     auto wide = win32_path(dir);
     if (!wide) {

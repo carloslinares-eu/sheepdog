@@ -37,6 +37,7 @@ scripts\test.ps1 -Preset win-ci        # -Werror, as CI
 |---|---|---|
 | `src/core/` | `sheepdog_core`, the Qt-free engine | `version()` |
 | `src/core/platform/` | OS layer, read side (`*_win.cpp` / `*_posix.cpp`) | `Result<T>`, `NativePath`, `list_dir`, `file_identity`, `volume_info`, `FileReader` |
+| `src/core/catalog/` | SQLite catalog: wrapper, schema v1 + migrations, backups, DB-writer thread | `Database`, `open_catalog`, `migrate`, `CatalogWriter` |
 | `src/cli/` | `sheepdog-cli`, links only the core | `main` |
 | `src/gui/` | `sheepdog_gui` lib + `sheepdog` exe | `gui::MainWindow` |
 | `tests/` | Catch2 tests (`sheepdog_tests`, `sheepdog_gui_tests`) | `test::TempDir` (`tests/support/temp_tree.hpp`) |

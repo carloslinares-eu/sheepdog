@@ -158,13 +158,6 @@ Media media_of(unsigned maj, unsigned min) {
     return Media::unknown;
 }
 
-bool is_remote_fs(std::string_view fs) {
-    static constexpr std::array<std::string_view, 10> kPrefixes = {
-        "nfs", "cifs", "smb", "fuse.sshfs", "9p", "afs", "ceph", "glusterfs", "fuse.rclone", "davfs"};
-    return std::ranges::any_of(kPrefixes,
-                               [fs](std::string_view prefix) { return fs.starts_with(prefix); });
-}
-
 } // namespace
 
 Result<VolumeInfo> volume_info(const NativePath& path) {
@@ -209,7 +202,7 @@ Result<VolumeInfo> volume_info(const NativePath& path) {
         }
     }
     info.media = media_of(maj, min);
-    info.remote = is_remote_fs(info.fs_type);
+    info.remote = is_remote_fs_type(info.fs_type);
     const bool fat_like =
         info.fs_type == "vfat" || info.fs_type == "msdos" || info.fs_type == "exfat";
     info.case_sensitive = probe_case_sensitive(path).value_or(!fat_like);

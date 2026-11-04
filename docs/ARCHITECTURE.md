@@ -8,7 +8,7 @@ model, kept current by every task that changes them. The reasoning behind the de
 
 | Target | Kind | Links | Notes |
 |---|---|---|---|
-| `sheepdog_core` (`sheepdog::core`) | static library | nothing (system libraries only) | The engine. No Qt, ever. Include root is `src/`, so headers are included as `"core/..."`. |
+| `sheepdog_core` (`sheepdog::core`) | static library | sqlite3 (private), Threads | The engine. No Qt, ever. Include root is `src/`, so headers are included as `"core/..."`. No public header includes `sqlite3.h`. |
 | `sheepdog-cli` | executable | core | Scripting interface and test oracle. |
 | `sheepdog_gui` | static library | core, Qt6::Widgets | GUI code, split from `main()` so the offscreen tests can link it. |
 | `sheepdog` | executable (WIN32) | sheepdog_gui | The Qt Widgets GUI. Built when `SHEEPDOG_BUILD_GUI=ON` (default). |
@@ -41,11 +41,19 @@ src/core/      sheepdog_core (no Qt)
     native_path.hpp  NativePath, display_string(), WTF-8 codec, is_valid_utf8()
     fs.hpp           list_dir, file_details, file_identity, volume_info, FileReader
     fs_common.cpp    Error::message, swap_ascii_case, probe_case_sensitive (OS-neutral)
+    location.cpp     is_unc_path, is_remote_fs_type, is_network_location (OS-neutral)
     win_util.hpp     internal Windows helpers (Handle, open_for_attributes, read_file_id)
+  catalog/       the SQLite catalog (Qt-free, no #ifdef)
+    errors.hpp       CatalogErrc + catalog_category()
+    sqlite.hpp       Database, Statement, Transaction (RAII), sqlite_category()
+    schema.hpp       kSchemaVersion, migrations(), migrate()
+    backup.hpp       backup_catalog, list_backups, newest_backup, backup_stamp
+    catalog.hpp      open_catalog, open_catalog_read_only, check_integrity, check_catalog_location
+    writer.hpp       CatalogWriter (the DB-writer thread), FileRow
 src/cli/       sheepdog-cli (main.cpp: --version, --help)
 src/gui/       sheepdog_gui + sheepdog (MainWindow, window_title())
 tests/         Catch2 tests (platform_win_test.cpp only on Windows, platform_linux_test.cpp
-               only on Linux)
+               only on Linux; catalog_test.cpp, catalog_writer_test.cpp on both)
   support/temp_tree.hpp  TempDir (unique folder under the system temp, removed without
                          following links), make_dir, write_file, rename_path, make_dir_link
                          (symlink / junction), remove_tree; native calls, NativePath names
@@ -69,7 +77,8 @@ docs/          DESIGN, RELEASE_PLAN, ARCHITECTURE, DEVELOPMENT, USER_GUIDE, CONT
 
 Namespace `sheepdog::platform`. Nothing here changes a file; writes arrive with `FsOps` (v0.2).
 
-- **Errors.** `Error{std::error_code code; NativePath path}` with `message()`.
+- **Errors.** `Error{std::error_code code; NativePath path; std::string detail}` with `message()`
+  (`"<code message>: <detail> (<path>)"`; `detail` is optional, e.g. SQLite's own message).
   `Result<T>` holds a value or an `Error` (`has_value()`, `operator bool`, `value()`, `*`, `->`,
   `error()`; using the wrong side calls `std::terminate`). `Result<void>` is built from `Ok{}`.
   POSIX codes use `std::generic_category()`, Windows codes `std::system_category()`
@@ -92,6 +101,9 @@ Namespace `sheepdog::platform`. Nothing here changes a file; writes arrive with 
 - **Details.** `FileDetails{kind, size, mtime_ns, btime_ns (0 if unknown), attributes
   (FILE_ATTRIBUTE_* or st_mode), cloud_only}`; times are ns since 1970 UTC. `cloud_only` is set
   for RECALL_ON_DATA_ACCESS / RECALL_ON_OPEN / OFFLINE (always false on Linux).
+  **Size rule (both OSes):** `size` is the byte count for `EntryKind::file` only and 0 for
+  folders, links and other entries. Linux would report a symlink's `st_size` (the length of its
+  target path), Windows reports 0; Sheepdog stores 0, so the catalog does not depend on the OS.
   `file_details(path)` describes a link itself (Windows: a handle opened with
   `FILE_FLAG_OPEN_REPARSE_POINT` and `FILE_READ_ATTRIBUTES`, which does not recall placeholders).
 - **Identity.** `file_identity(path)` → `FileId{uint64 volume; array<uint8,16> file}`: Windows
@@ -107,9 +119,63 @@ Namespace `sheepdog::platform`. Nothing here changes a file; writes arrive with 
   `case_sensitive` comes from `probe_case_sensitive(dir)`: it looks up an existing name with its
   ASCII case swapped and compares identities (read-only); the fallback is insensitive on Windows
   and on vfat/exfat, sensitive elsewhere.
+- **Network locations.** `is_network_location(path)` is true for a UNC path (Windows; recognised
+  from its text without network access: `\\server\share`, `//server/share`, `\\?\UNC\...`),
+  a mapped network drive (`GetDriveTypeW`) or a remote filesystem on Linux (`is_remote_fs_type`:
+  nfs*, cifs, smb*, fuse.sshfs, 9p, afs, ceph, glusterfs, fuse.rclone, davfs). A path that does
+  not exist yet is judged by its nearest existing folder.
+- **Own files.** `remove_app_file(path)` deletes one of Sheepdog's own files (old catalog
+  backups). Never for user files: those change only through `FsOps` (v0.2).
 - **Reading.** `FileReader::open(path)` (Linux `O_NOFOLLOW`, sequential advice; Windows
   `FILE_FLAG_SEQUENTIAL_SCAN`, follows links, so open only `EntryKind::file` entries), then
   `read(span<byte>)` → bytes read, 0 at the end. Move-only.
+
+### core/catalog (0.1-T5)
+
+Namespace `sheepdog::catalog`. Errors are `platform::Result<T>`: SQLite failures carry the
+extended result code in `sqlite_category()` and `sqlite3_errmsg` as `detail`; the catalog's own
+refusals use `CatalogErrc` (`corrupt`, `network_location`, `newer_schema`, `not_migrated`,
+`not_a_catalog`, `wal_unavailable`) in `catalog_category()`, comparable as
+`error.code == CatalogErrc::corrupt`.
+
+- **SQLite wrapper.** `Database::open(path, OpenMode::{read_only, read_write, create})`
+  (extended codes, 5 s busy timeout, `SQLITE_OPEN_NOMUTEX`: one thread at a time, movable
+  between threads); `exec`, `prepare` -> `Statement`, `query_int`, `query_text`,
+  `last_insert_rowid`. `Statement`: chained `bind(i, int64|string_view)`, `bind_blob`,
+  `bind_null` (1-based; a failed bind surfaces at the next `step`), `step()` -> `Result<bool>`
+  (true = row), `run()`, `reset()`, `column_int64/text/blob`, `is_null` (0-based).
+  `Transaction::begin(db, Kind::immediate)` -> `commit()`; the destructor rolls back.
+- **Opening.** `open_catalog(path)` is the only read-write entry point: refuses network
+  locations, opens (creating the file; the folder must exist), runs `PRAGMA integrity_check(3)`,
+  sets `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `trusted_schema=OFF`,
+  `wal_autocheckpoint=10000` (fewer checkpoint fsyncs: a 100k-row scan writes about twice as
+  fast) and `journal_size_limit=64 MiB`, then `migrate()`. Damage (integrity findings,
+  `SQLITE_CORRUPT`, `SQLITE_NOTADB`) becomes `CatalogErrc::corrupt` with a detail naming the
+  finding and `restore_advice()`: the newest backup's path and "close Sheepdog and copy it over
+  the catalog", or "No backup was found". `open_catalog_read_only(path)` opens with
+  `query_only=ON` and needs a catalog already at `kSchemaVersion` (else `not_migrated` /
+  `newer_schema`); it runs no integrity check.
+- **Migrations.** `PRAGMA user_version` is the schema version; `PRAGMA application_id` =
+  `kApplicationId` (`0x53484447`, "SHDG") marks a Sheepdog file. `migrate(db)` refuses a newer
+  version and a foreign database (tables but version 0, or another application id), makes a
+  backup **before** the first migration (also for a brand-new, empty catalog), then runs each
+  pending `Migration{version, sql}` in its own transaction, which also sets `user_version`. On a
+  current catalog it does nothing and makes no backup. A new schema version = append to
+  `kMigrations` in `schema.cpp` and bump `kSchemaVersion`.
+- **Backups.** `backup_catalog(db, version)` copies with `sqlite3_backup` to
+  `<catalog file>.bak-<YYYYMMDDTHHMMSSmmm>Z-v<version>` next to the catalog (UTC, fixed width, so
+  names sort oldest first; it never overwrites, it steps the stamp instead) and deletes all but
+  the newest `kKeepBackups` (10). `list_backups(catalog)` (oldest first), `newest_backup(catalog)`.
+- **Writer.** `CatalogWriter(Database db, WriterOptions{batch_size = 1000, queue_capacity = 8000,
+  max_delay = 50 ms})` owns the read-write connection on its own `std::jthread`.
+  `upsert_file(FileRow)` inserts or updates by `(root_id, rel_path)` (status back to `present`;
+  a changed size or mtime clears `quick_fp`, `blake3` and `meta_ver`); `execute(Op)` runs any
+  `Result<void>(Database&)` inside the batch transaction (no BEGIN/COMMIT inside). Both block
+  while the queue is full. A batch commits when full, when `flush()` waits, or `max_delay` after
+  its first item. A failing item rolls its whole batch back; `flush()` waits until everything
+  queued is committed and returns (then clears) the first error. `stats()`: committed items,
+  transactions, failed items. The destructor commits what is queued, then joins.
+  100k rows take about 0.8 s (Windows Release) and 1.3 s (carbon container, Release).
 
 ### gui/main_window.hpp
 
@@ -119,9 +185,35 @@ Namespace `sheepdog::platform`. Nothing here changes a file; writes arrive with 
 
 ## Catalog schema
 
-No catalog yet (schema v1 arrives with 0.1-T5).
+**Version 1** (`kSchemaVersion = 1`, `src/core/catalog/schema.cpp`), STRICT tables. Paths are
+stored twice: native bytes in a BLOB (WTF-8 on Windows) and UTF-8 `display` text. Times are
+nanoseconds since 1970 UTC.
+
+```sql
+volume(id INTEGER PRIMARY KEY, uid TEXT NOT NULL UNIQUE, label TEXT, fs_type TEXT,
+       case_sensitive INTEGER, rotational INTEGER NULL, online INTEGER DEFAULT 1)
+root(id, volume_id -> volume, path BLOB, display TEXT, added INTEGER, UNIQUE(volume_id, path))
+file(id, root_id -> root ON DELETE CASCADE, rel_path BLOB, display TEXT, name_key TEXT,
+     size INTEGER, mtime_ns, btime_ns DEFAULT 0, fs_id BLOB, quick_fp BLOB, blake3 BLOB,
+     kind INTEGER,              -- platform::EntryKind: 0 file, 1 directory, 2 link, 3 other
+     ftype TEXT, taken TEXT, taken_off INTEGER, taken_src TEXT, taken_conf INTEGER,
+     status TEXT DEFAULT 'present' CHECK(status IN ('present','missing','ignored')),
+     last_seen INTEGER, meta_ver INTEGER DEFAULT 0, UNIQUE(root_id, rel_path))
+meta(file_id -> file ON DELETE CASCADE, key TEXT, txt TEXT, num REAL,
+     PRIMARY KEY(file_id, key)) WITHOUT ROWID
+-- indexes: root(volume_id), file(blake3), file(size, quick_fp), file(fs_id),
+--          meta(key, num), meta(key, txt)
+```
+
+`file.size` follows the platform size rule: 0 for anything but a regular file (links included).
+Tag, rule, layout, batch/op (journal) and FTS tables arrive with later migrations.
 
 ## Thread model
 
-Nothing threaded yet. Planned (DESIGN.md, "Architecture"): GUI thread, one `std::jthread` per job,
-a bounded worker pool, one DB-writer thread, a query thread.
+- **DB writer** (0.1-T5): one `CatalogWriter` thread owns the only read-write connection;
+  producers queue work (a bounded queue; they block when it is full) and never call SQLite.
+  The mutex guards the queue, the error slot and the stats only; SQLite runs outside it.
+- **Readers**: each reading thread opens its own `open_catalog_read_only()` connection (WAL lets
+  readers run while the writer commits). A connection is used by one thread at a time.
+- Planned (DESIGN.md, "Architecture"): GUI thread, one `std::jthread` per job, a bounded worker
+  pool, a query thread.

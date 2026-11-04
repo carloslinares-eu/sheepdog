@@ -18,8 +18,11 @@ namespace sheepdog::platform {
 struct Error {
     std::error_code code;
     NativePath path;
+    // Optional extra text, such as SQLite's own message or advice on what to do next.
+    // The {} stops GCC's -Wmissing-field-initializers for Error{.code, .path}.
+    std::string detail{}; // NOLINT(readability-redundant-member-init)
 
-    // "<message> (<path as display text>)", for logs and the UI.
+    // "<message>: <detail> (<path as display text>)", for logs and the UI.
     [[nodiscard]] std::string message() const;
 };
 

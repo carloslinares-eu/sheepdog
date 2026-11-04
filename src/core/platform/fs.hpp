@@ -32,7 +32,7 @@ enum class EntryKind : std::uint8_t {
 
 struct FileDetails {
     EntryKind kind = EntryKind::other;
-    std::uint64_t size = 0;    // bytes; 0 for folders
+    std::uint64_t size = 0;    // bytes; 0 for everything but files (folders, links, other)
     std::int64_t mtime_ns = 0; // last write, nanoseconds since 1970-01-01 UTC
     std::int64_t btime_ns = 0; // creation (birth) time, 0 when the filesystem has none
     // Native attributes: FILE_ATTRIBUTE_* on Windows, st_mode on Linux.
@@ -90,6 +90,23 @@ struct VolumeInfo {
 // Describes the volume that holds `path` (a folder). The case-sensitivity probe looks up an
 // existing name in `path` with its letter case swapped and compares identities; it writes nothing.
 [[nodiscard]] Result<VolumeInfo> volume_info(const NativePath& path);
+
+// True for Linux filesystem types that live on another machine: nfs, nfs4, cifs, smb3,
+// fuse.sshfs, 9p, ... (a prefix match on the type from /proc/self/mountinfo).
+[[nodiscard]] bool is_remote_fs_type(std::string_view fs_type) noexcept;
+
+// True for a Windows UNC path (\\server\share, //server/share or \\?\UNC\...); false for
+// \\?\C:\ and \\.\ device paths. A plain string test, so both OSes can test it.
+[[nodiscard]] bool is_unc_path(std::string_view bytes) noexcept;
+
+// True when `path` lies on a network share: a UNC path or a mapped network drive on Windows,
+// a remote filesystem (NFS, SMB, sshfs, ...) on Linux. `path` need not exist; its nearest
+// existing folder is checked. A UNC path is recognised from its text, without network access.
+[[nodiscard]] Result<bool> is_network_location(const NativePath& path);
+
+// Deletes one of Sheepdog's own files (an old catalog backup). Never use it on user files:
+// those change only through FsOps (v0.2). A link is removed, not its target.
+[[nodiscard]] Result<void> remove_app_file(const NativePath& path);
 
 // Read-only access to a file's contents. Open only entries listed as EntryKind::file.
 class FileReader {

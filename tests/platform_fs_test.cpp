@@ -122,6 +122,9 @@ TEST_CASE("a folder link loop is reported as a link and never followed", "[fs]")
     REQUIRE(names_of(*entries) == std::vector<std::string>{"file.txt", "loop"});
     CHECK((*entries)[1].details.kind == pf::EntryKind::link);
     CHECK(pf::file_details(tmp / "top" / "loop")->kind == pf::EntryKind::link);
+    // One rule on both OSes: a link has size 0 (Linux would otherwise report st_size).
+    CHECK((*entries)[1].details.size == 0);
+    CHECK(pf::file_details(tmp / "top" / "loop")->size == 0);
 
     // Listing the link itself is refused rather than followed.
     const auto through = pf::list_dir(tmp / "top" / "loop");

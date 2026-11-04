@@ -142,7 +142,7 @@ The `docker compose run ...` commands in the task cards run on carbon, through `
     - file names that are not valid UTF-8 (container) and names with unpaired surrogates (Windows) round-trip through the codec and the folder listing
     - a path longer than 260 characters can be listed and read on Windows
     - a file keeps its identity across a rename on both OSes, and a symlink or junction loop is not followed
-- [ ] **0.1-T5 Catalog database** (M; effort high; after: 0.1-T3)
+- [x] **0.1-T5 Catalog database** (M; effort high; after: 0.1-T3)
   - Scope: In: a SQLite RAII wrapper; schema v1 (volume, root, file, meta); user_version migrations with a sqlite3_backup first; WAL and pragmas; integrity_check on open; refusal of network locations; a DB-writer thread with batched transactions; read-only connections. Out: tag and journal tables, which later migrations add.
   - Done when:
     - migration tests: empty to v1 runs once, can safely run again, and leaves a backup

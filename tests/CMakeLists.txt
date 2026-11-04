@@ -10,6 +10,8 @@ add_executable(sheepdog_tests
     dependencies_test.cpp
     platform_path_test.cpp
     platform_fs_test.cpp
+    catalog_test.cpp
+    catalog_writer_test.cpp
     support/temp_tree.hpp
     support/temp_tree.cpp)
 if(WIN32)
@@ -18,6 +20,10 @@ if(WIN32)
         UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00 WINVER=0x0A00)
 else()
     target_sources(sheepdog_tests PRIVATE platform_linux_test.cpp)
+endif()
+if(SHEEPDOG_SANITIZE)
+    # Timing limits (the catalog writer's 2 s) are checked only in optimised, unsanitized builds.
+    target_compile_definitions(sheepdog_tests PRIVATE SHEEPDOG_SANITIZED=1)
 endif()
 target_include_directories(sheepdog_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(sheepdog_tests PRIVATE

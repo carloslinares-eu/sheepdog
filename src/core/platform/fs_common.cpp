@@ -8,6 +8,10 @@ namespace sheepdog::platform {
 
 std::string Error::message() const {
     std::string text = code.message();
+    if (!detail.empty()) {
+        text += ": ";
+        text += detail;
+    }
     if (!path.empty()) {
         text += " (";
         text += display_string(path);

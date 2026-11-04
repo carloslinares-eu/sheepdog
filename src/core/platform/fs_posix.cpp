@@ -56,7 +56,7 @@ int stat_at(int dirfd, const char* name, FileDetails& out) {
     constexpr unsigned kMask = STATX_BASIC_STATS | STATX_BTIME;
     if (::statx(dirfd, name, AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT, kMask, &sx) == 0) {
         out.kind = kind_of(sx.stx_mode);
-        out.size = out.kind == EntryKind::directory ? 0 : sx.stx_size;
+        out.size = out.kind == EntryKind::file ? sx.stx_size : 0;
         out.mtime_ns = to_ns(sx.stx_mtime.tv_sec, sx.stx_mtime.tv_nsec);
         out.btime_ns = (sx.stx_mask & STATX_BTIME) != 0U
                            ? to_ns(sx.stx_btime.tv_sec, sx.stx_btime.tv_nsec)
@@ -72,7 +72,7 @@ int stat_at(int dirfd, const char* name, FileDetails& out) {
         return -1;
     }
     out.kind = kind_of(st.st_mode);
-    out.size = out.kind == EntryKind::directory ? 0 : static_cast<std::uint64_t>(st.st_size);
+    out.size = out.kind == EntryKind::file ? static_cast<std::uint64_t>(st.st_size) : 0;
     out.mtime_ns = to_ns(st.st_mtim.tv_sec, st.st_mtim.tv_nsec);
     out.btime_ns = 0;
     out.attributes = st.st_mode;
@@ -144,6 +144,16 @@ Result<FileDetails> file_details(const NativePath& path) {
         return last_error(path);
     }
     return details;
+}
+
+Result<void> remove_app_file(const NativePath& path) {
+    if (has_nul(path)) {
+        return make_error(std::errc::invalid_argument, path);
+    }
+    if (::unlink(path.bytes().c_str()) != 0) {
+        return last_error(path);
+    }
+    return Ok{};
 }
 
 Result<FileId> file_identity(const NativePath& path) {

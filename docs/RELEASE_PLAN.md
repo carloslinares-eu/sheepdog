@@ -67,7 +67,7 @@ This is **task 0.1-T1**. You do the installs yourself (about an hour); Claude th
 3. **vcpkg.** Done on 2026-10-31: the clone at `F:\Workspace\vcpkg` is current (tool 2026-07-27) and `VCPKG_ROOT` is set. Sheepdog uses the community triplet `x64-mingw-static` for both target and host, so zebra's MSVC builds are unaffected.
 4. **Qt 6.12.0 for MinGW.** Done on 2026-10-31 with the Qt Online Installer into `C:\Qt` (kit `C:\Qt\6.12.0\mingw_64`). Qt SVG, Linguist and windeployqt come with the base package. Add Additional Libraries → Qt Image Formats with the Qt Maintenance Tool before thumbnails (v0.7). The kit path goes into the git-ignored `CMakeUserPresets.json`.
 5. **CMake and Ninja.** Use CMake 3.30 and Ninja 1.12 from `C:\Qt\Tools\CMake_64` and `C:\Qt\Tools\Ninja`; the build scripts put them on PATH. The old CMake 3.25 on PATH is not used.
-6. **CLion.** Settings → Toolchains → + MinGW → `C:\Qt\Tools\mingw1310_64`, CMake `C:\Qt\Tools\CMake_64\bin\cmake.exe`, moved to the top. Enable the `win-debug` and `win-release` presets and remove the default profile.
+6. **CLion.** Settings → Toolchains → + MinGW → `C:\Qt\Tools\mingw1310_64`, CMake `C:\Qt\Tools\CMake_64\bin\cmake.exe`, moved to the top. Enable the `dev-debug` and `dev-release` presets from the git-ignored `CMakeUserPresets.json` (created by `scripts\build.ps1`; they inherit `win-debug`/`win-release` and add the Qt path) and remove the default profile.
 7. **carbon over SSH.** Done on 2026-10-31. This is in `%USERPROFILE%\.ssh\config` so `ssh carbon` works for scripts, Claude and CLion:
    ```
    Host carbon
@@ -109,13 +109,13 @@ The `docker compose run ...` commands in the task cards run on carbon, through `
 **Goal:** Set up the toolchain, the repo, CI and the Linux test container, then scan folders into a catalog and browse it. Nothing is ever written to user folders.  
 **You get:** Download a zip or AppImage from GitHub, add several folders at once, watch a scan with speed, ETA and a Stop button, and browse a sortable file table with an Inspector.
 
-- [ ] **0.1-T1 Toolchain on this machine** (S; effort medium; after: none)
+- [x] **0.1-T1 Toolchain on this machine** (S; effort medium; after: none)
   - Scope: Done on 2026-10-31: vcpkg updated and VCPKG_ROOT set; Qt 6.12.0 for MinGW installed in C:\Qt with MinGW 13.1, CMake and Ninja; the `Host carbon` SSH entry added (see Environment setup). Claude turns the drafted docs/RELEASE_PLAN.md and docs/DESIGN.md into the start of the repo (git init, first commit) and adds docs/DEVELOPMENT.md, scripts/check-env.ps1 and a throwaway hello-Qt project that is not committed. Out: the real project structure.
   - Done when:
     - scripts/check-env.ps1 reports every check green: Qt 6.12 MinGW kit, MinGW 13.1, CMake, Ninja, VCPKG_ROOT, and `ssh carbon docker info`
     - the hello-Qt window builds and runs from CLion (MinGW toolchain) and from the terminal
     - the repo exists, with the two plan documents in its first commit
-- [ ] **0.1-T2 Repo bootstrap** (M; effort medium; after: 0.1-T1)
+- [x] **0.1-T2 Repo bootstrap** (M; effort medium; after: 0.1-T1)
   - Scope: In: CMake targets (sheepdog_core, sheepdog-cli, a sheepdog GUI stub, tests); CMakePresets.json version 6 (win-debug, win-release, win-ci, linux-debug, linux-release, linux-asan, linux-tsan, linux-fuzz); a git-ignored CMakeUserPresets.json for the Qt path; vcpkg.json with builtin-baseline (sqlite3[fts5], blake3, catch2) and triplets x64-mingw-static (target and host) and x64-linux; warning flags with a WARNINGS_AS_ERRORS option; version from project(VERSION) plus git describe; Windows manifest and version resource; scripts/build.ps1 and scripts/test.ps1 (put MinGW 13.1, CMake and Ninja from C:\Qt\Tools on PATH; Windows PowerShell 5.1); CLAUDE.md; docs skeleton (ARCHITECTURE, USER_GUIDE, CONTRIBUTING, CHANGELOG in Keep a Changelog format, THIRD_PARTY_LICENSES); MIT LICENSE; README; .gitignore (.idea/, cmake-build-*/, build/, out/, CMakeUserPresets.json, inspection results); .clang-format, .clang-tidy, .editorconfig. Out: CI and features.
   - Done when:
     - scripts/test.ps1 configures win-debug, builds, and passes a sample Catch2 test

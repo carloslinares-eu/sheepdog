@@ -1,0 +1,25 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "dev-debug",
+      "displayName": "Dev Debug (local Qt)",
+      "inherits": "win-debug",
+      "environment": { "SHEEPDOG_QT_DIR": "@QT_DIR@" }
+    },
+    {
+      "name": "dev-release",
+      "displayName": "Dev Release (local Qt)",
+      "inherits": "win-release",
+      "environment": { "SHEEPDOG_QT_DIR": "@QT_DIR@" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "dev-debug", "configurePreset": "dev-debug" },
+    { "name": "dev-release", "configurePreset": "dev-release" }
+  ],
+  "testPresets": [
+    { "name": "dev-debug", "inherits": "win-debug", "configurePreset": "dev-debug" },
+    { "name": "dev-release", "inherits": "win-release", "configurePreset": "dev-release" }
+  ]
+}

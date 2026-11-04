@@ -1,0 +1,26 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++20
+IndentWidth: 4
+ColumnLimit: 100
+AccessModifierOffset: -4
+PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: All
+BreakBeforeBraces: Attach
+FixNamespaceComments: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Project headers first, then Qt, then third-party, then the standard library.
+  - Regex: '^"'
+    Priority: 1
+  - Regex: '^<Q'
+    Priority: 2
+  - Regex: '^<(catch2|blake3|sqlite3)'
+    Priority: 3
+  - Regex: '^<'
+    Priority: 4
+InsertNewlineAtEOF: true
+...

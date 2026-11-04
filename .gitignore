@@ -1,0 +1,25 @@
+# Build output
+/build/
+/build-*/
+/out/
+cmake-build-*/
+vcpkg_installed/
+/dist/
+
+# Local configuration
+CMakeUserPresets.json
+.idea/
+.vs/
+.vscode/
+*.user
+
+# Inspection and analysis results
+/inspection-results/
+*.sarif
+compile_commands.json
+
+# Logs and editor leftovers
+*.log
+*~
+*.swp
+Testing/

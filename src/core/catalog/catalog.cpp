@@ -129,6 +129,10 @@ Result<Database> open_catalog(const NativePath& catalog) {
     if (auto ok = check_integrity(*db); !ok) {
         return ok.error();
     }
+    // journal_mode=WAL is stored in the file, so a foreign database is refused before it.
+    if (auto identity = check_identity(*db); !identity) {
+        return classify(identity.error(), catalog);
+    }
     const auto mode = db->query_text("PRAGMA journal_mode = WAL");
     if (!mode) {
         return classify(mode.error(), catalog);
@@ -167,19 +171,9 @@ Result<Database> open_catalog_read_only(const NativePath& catalog) {
     if (auto ok = db->exec("PRAGMA query_only = ON; PRAGMA trusted_schema = OFF;"); !ok) {
         return classify(ok.error(), catalog);
     }
-    const auto version = db->query_int("PRAGMA user_version");
+    const auto version = check_identity(*db);
     if (!version) {
         return classify(version.error(), catalog);
-    }
-    const auto app_id = db->query_int("PRAGMA application_id");
-    if (!app_id) {
-        return classify(app_id.error(), catalog);
-    }
-    if (*app_id != kApplicationId) {
-        return Error{.code = make_error_code(CatalogErrc::not_a_catalog), .path = catalog};
-    }
-    if (*version > kSchemaVersion) {
-        return Error{.code = make_error_code(CatalogErrc::newer_schema), .path = catalog};
     }
     if (*version < kSchemaVersion) {
         return Error{.code = make_error_code(CatalogErrc::not_migrated), .path = catalog};

@@ -46,7 +46,7 @@ src/core/      sheepdog_core (no Qt)
   catalog/       the SQLite catalog (Qt-free, no #ifdef)
     errors.hpp       CatalogErrc + catalog_category()
     sqlite.hpp       Database, Statement, Transaction (RAII), sqlite_category()
-    schema.hpp       kSchemaVersion, migrations(), migrate()
+    schema.hpp       kSchemaVersion, migrations(), check_identity(), migrate()
     backup.hpp       backup_catalog, list_backups, newest_backup, backup_stamp
     catalog.hpp      open_catalog, open_catalog_read_only, check_integrity, check_catalog_location
     writer.hpp       CatalogWriter (the DB-writer thread), FileRow
@@ -147,17 +147,19 @@ refusals use `CatalogErrc` (`corrupt`, `network_location`, `newer_schema`, `not_
   `Transaction::begin(db, Kind::immediate)` -> `commit()`; the destructor rolls back.
 - **Opening.** `open_catalog(path)` is the only read-write entry point: refuses network
   locations, opens (creating the file; the folder must exist), runs `PRAGMA integrity_check(3)`,
+  then `check_identity()` (so a foreign file is refused before anything is written to it), then
   sets `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `trusted_schema=OFF`,
   `wal_autocheckpoint=10000` (fewer checkpoint fsyncs: a 100k-row scan writes about twice as
   fast) and `journal_size_limit=64 MiB`, then `migrate()`. Damage (integrity findings,
   `SQLITE_CORRUPT`, `SQLITE_NOTADB`) becomes `CatalogErrc::corrupt` with a detail naming the
   finding and `restore_advice()`: the newest backup's path and "close Sheepdog and copy it over
   the catalog", or "No backup was found". `open_catalog_read_only(path)` opens with
-  `query_only=ON` and needs a catalog already at `kSchemaVersion` (else `not_migrated` /
-  `newer_schema`); it runs no integrity check.
+  `query_only=ON`, runs the same `check_identity()` and needs a catalog already at
+  `kSchemaVersion` (else `not_migrated`); it runs no integrity check.
 - **Migrations.** `PRAGMA user_version` is the schema version; `PRAGMA application_id` =
-  `kApplicationId` (`0x53484447`, "SHDG") marks a Sheepdog file. `migrate(db)` refuses a newer
-  version and a foreign database (tables but version 0, or another application id), makes a
+  `kApplicationId` (`0x53484447`, "SHDG") marks a Sheepdog file. `check_identity(db)` ->
+  `Result<int>` reads both without writing and refuses a foreign database (tables but version 0,
+  or any version >= 1 without `kApplicationId`) and a newer version. `migrate(db)` calls it, makes a
   backup **before** the first migration (also for a brand-new, empty catalog), then runs each
   pending `Migration{version, sql}` in its own transaction, which also sets `user_version`. On a
   current catalog it does nothing and makes no backup. A new schema version = append to

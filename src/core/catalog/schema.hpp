@@ -32,7 +32,13 @@ struct MigrationResult {
     NativePath backup{}; // NOLINT(readability-redundant-member-init)
 };
 
-// Brings `db` to kSchemaVersion. Refuses a newer schema (CatalogErrc::newer_schema) and a
+// Reads user_version and application_id without changing the file and returns the schema
+// version. Refuses a database Sheepdog did not create (CatalogErrc::not_a_catalog: tables at
+// version 0, or a version without kApplicationId) and a newer schema (CatalogErrc::newer_schema).
+// An empty file is version 0. open_catalog runs it before any pragma that writes to the file.
+[[nodiscard]] Result<int> check_identity(Database& db);
+
+// Brings `db` to kSchemaVersion (check_identity first). Refuses a newer schema (CatalogErrc::newer_schema) and a
 // database Sheepdog did not create (CatalogErrc::not_a_catalog). Running it again on a current
 // catalog does nothing and makes no backup.
 [[nodiscard]] Result<MigrationResult> migrate(Database& db);

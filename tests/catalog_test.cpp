@@ -131,6 +131,42 @@ TEST_CASE("a catalog from a newer Sheepdog or a foreign database is refused", "[
     CHECK(cat::list_backups(tmp / "other.db").empty());
 }
 
+TEST_CASE("a refused foreign database is left as it was", "[unit][fs]") {
+    const TempDir tmp;
+    const auto path = tmp / "notes.db";
+    {
+        auto raw = cat::Database::open(path, cat::OpenMode::create);
+        REQUIRE(raw.has_value());
+        REQUIRE(raw->exec("CREATE TABLE notes(text TEXT);"));
+    }
+    const auto refused = cat::open_catalog(path);
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().code == cat::CatalogErrc::not_a_catalog);
+    auto raw = cat::Database::open(path, cat::OpenMode::read_only);
+    REQUIRE(raw.has_value());
+    const auto mode = raw->query_text("PRAGMA journal_mode");
+    REQUIRE(mode.has_value());
+    CHECK(*mode == "delete");
+}
+
+TEST_CASE("a foreign database at the current user_version is refused", "[unit][fs]") {
+    const TempDir tmp;
+    const auto path = tmp / "versioned.db";
+    {
+        auto raw = cat::Database::open(path, cat::OpenMode::create);
+        REQUIRE(raw.has_value());
+        REQUIRE(raw->exec("CREATE TABLE notes(text TEXT); PRAGMA user_version = " +
+                          std::to_string(cat::kSchemaVersion) + ";"));
+    }
+    const auto rw = cat::open_catalog(path);
+    REQUIRE_FALSE(rw.has_value());
+    CHECK(rw.error().code == cat::CatalogErrc::not_a_catalog);
+    const auto ro = cat::open_catalog_read_only(path);
+    REQUIRE_FALSE(ro.has_value());
+    CHECK(ro.error().code == cat::CatalogErrc::not_a_catalog);
+    CHECK(cat::list_backups(path).empty());
+}
+
 TEST_CASE("backup stamps are fixed-width UTC times", "[unit]") {
     CHECK(cat::backup_stamp(0) == "19700101T000000000Z");
     CHECK(cat::backup_stamp(1'793'823'300'123) == "20261104T201500123Z");

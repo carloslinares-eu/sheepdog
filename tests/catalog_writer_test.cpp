@@ -197,11 +197,12 @@ TEST_CASE("read-only connections cannot write and need a migrated catalog", "[un
     const auto write = reader->exec("INSERT INTO volume(uid) VALUES('x')");
     CHECK_FALSE(write.has_value());
 
-    // A Sheepdog file at version 0 has not been migrated yet.
+    // An empty file at version 0 has not been migrated yet. (Tables at version 0 would be a
+    // foreign database: migrations set application_id together with the tables.)
     {
         auto raw = cat::Database::open(tmp / "old.db", cat::OpenMode::create);
         REQUIRE(raw.has_value());
-        REQUIRE(raw->exec("PRAGMA application_id = 1397244999; CREATE TABLE t(x);"));
+        REQUIRE(raw->exec("PRAGMA application_id = 1397244999;"));
     }
     const auto old = cat::open_catalog_read_only(tmp / "old.db");
     REQUIRE_FALSE(old.has_value());

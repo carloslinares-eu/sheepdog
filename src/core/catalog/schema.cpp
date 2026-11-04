@@ -103,7 +103,7 @@ std::span<const Migration> migrations() noexcept {
     return kMigrations;
 }
 
-Result<MigrationResult> migrate(Database& db) {
+Result<int> check_identity(Database& db) {
     const auto version = db.query_int("PRAGMA user_version");
     if (!version) {
         return version.error();
@@ -112,16 +112,7 @@ Result<MigrationResult> migrate(Database& db) {
     if (!app_id) {
         return app_id.error();
     }
-    MigrationResult result{.from = static_cast<int>(*version), .to = static_cast<int>(*version)};
-    if (*version > kSchemaVersion) {
-        return Error{.code = make_error_code(CatalogErrc::newer_schema),
-                     .path = db.path(),
-                     .detail = "schema " + std::to_string(*version) + ", this build reads up to " +
-                               std::to_string(kSchemaVersion)};
-    }
-    if (*version == kSchemaVersion) {
-        return result;
-    }
+    const Error foreign{.code = make_error_code(CatalogErrc::not_a_catalog), .path = db.path()};
     if (*version == 0) {
         // A new catalog is empty; anything else is someone else's database.
         const auto objects = db.query_int("SELECT count(*) FROM sqlite_schema");
@@ -129,10 +120,32 @@ Result<MigrationResult> migrate(Database& db) {
             return objects.error();
         }
         if (*objects != 0 || (*app_id != 0 && *app_id != kApplicationId)) {
-            return Error{.code = make_error_code(CatalogErrc::not_a_catalog), .path = db.path()};
+            return foreign;
         }
-    } else if (*app_id != kApplicationId) {
-        return Error{.code = make_error_code(CatalogErrc::not_a_catalog), .path = db.path()};
+        return 0;
+    }
+    // Every migration sets application_id with user_version, so a versioned file without it
+    // was made by someone else, whatever its version.
+    if (*app_id != kApplicationId || *version < 0) {
+        return foreign;
+    }
+    if (*version > kSchemaVersion) {
+        return Error{.code = make_error_code(CatalogErrc::newer_schema),
+                     .path = db.path(),
+                     .detail = "schema " + std::to_string(*version) + ", this build reads up to " +
+                               std::to_string(kSchemaVersion)};
+    }
+    return static_cast<int>(*version);
+}
+
+Result<MigrationResult> migrate(Database& db) {
+    const auto version = check_identity(db);
+    if (!version) {
+        return version.error();
+    }
+    MigrationResult result{.from = *version, .to = *version};
+    if (*version == kSchemaVersion) {
+        return result;
     }
 
     auto backup = backup_catalog(db, result.from);

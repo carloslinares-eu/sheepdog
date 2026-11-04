@@ -7,7 +7,19 @@ include(Catch)
 # so `ctest -L unit` picks a group.
 add_executable(sheepdog_tests
     version_test.cpp
-    dependencies_test.cpp)
+    dependencies_test.cpp
+    platform_path_test.cpp
+    platform_fs_test.cpp
+    support/temp_tree.hpp
+    support/temp_tree.cpp)
+if(WIN32)
+    target_sources(sheepdog_tests PRIVATE platform_win_test.cpp)
+    target_compile_definitions(sheepdog_tests PRIVATE
+        UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00 WINVER=0x0A00)
+else()
+    target_sources(sheepdog_tests PRIVATE platform_linux_test.cpp)
+endif()
+target_include_directories(sheepdog_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(sheepdog_tests PRIVATE
     sheepdog::core Catch2::Catch2WithMain unofficial::sqlite3::sqlite3 BLAKE3::blake3)
 sheepdog_set_warnings(sheepdog_tests)

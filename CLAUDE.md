@@ -36,9 +36,10 @@ scripts\test.ps1 -Preset win-ci        # -Werror, as CI
 | Directory | Responsibility | Key types |
 |---|---|---|
 | `src/core/` | `sheepdog_core`, the Qt-free engine | `version()` |
+| `src/core/platform/` | OS layer, read side (`*_win.cpp` / `*_posix.cpp`) | `Result<T>`, `NativePath`, `list_dir`, `file_identity`, `volume_info`, `FileReader` |
 | `src/cli/` | `sheepdog-cli`, links only the core | `main` |
 | `src/gui/` | `sheepdog_gui` lib + `sheepdog` exe | `gui::MainWindow` |
-| `tests/` | Catch2 tests (`sheepdog_tests`, `sheepdog_gui_tests`) | |
+| `tests/` | Catch2 tests (`sheepdog_tests`, `sheepdog_gui_tests`) | `test::TempDir` (`tests/support/temp_tree.hpp`) |
 | `cmake/` | warnings, sanitizers, git version, Windows rc + manifest | |
 | `scripts/` | build, test, env, check-env, linux-test (PowerShell 5.1) | |
 | `docker/`, `compose.yaml` | Linux CI image and services (run on carbon) | |

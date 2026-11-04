@@ -24,6 +24,21 @@ Created 2026-10-31. This file is the single source of truth for the work: change
 - [x] Should tags ever leave the catalog? Recommendation: XMP sidecars and user.xdg.tags as opt-in exports after 1.0, and never writing into the files themselves.
   **Answer (2026-11-04):** follow the recommendation.
 
+## Review follow-ups
+
+Optional notes from the task reviews that no task card covers yet. Fold each into the task that touches the code, or tick it with a reason.
+
+- [ ] Catalog backups (from 0.1-T5): if `sqlite3_backup_init` or `sqlite3_backup_step` fails (disk full, I/O error), the partial file keeps a valid `<catalog>.bak-<stamp>-v<N>` name, and `newest_backup()` would offer it for a restore. Write to a temporary name and rename it on success, or remove the target on failure. Do this before the first real migration (v0.2).
+- [ ] CatalogWriter (from 0.1-T5): an error raised in the destructor, or one never collected by `flush()`, is dropped silently. Log it, or document that callers must `flush()` before destruction.
+- [ ] Catalog path (from 0.1-T5): `Database::open` passes WTF-8 bytes to `sqlite3_open_v2` as UTF-8, so a Windows catalog path with unpaired surrogates, or one longer than MAX_PATH, may fail inside SQLite's win32 VFS. Unlikely under `%LOCALAPPDATA%`; at least add a comment.
+- [ ] Network refusal tests (from 0.1-T5): the Linux path is unit-tested only on fs-type strings, and the Windows mapped-drive path (GetDriveTypeW) has no test. Inject a VolumeInfo with `remote = true` into `check_catalog_location`.
+- [ ] Backup slots (from 0.1-T5): every new catalog keeps a backup of an empty v0 database, which uses one of the 10 slots. Harmless; consider skipping the backup when v0 is empty.
+- [ ] Path decoder (from 0.1-T4): `utf16_from_wtf8` accepts a surrogate pair encoded as two 3-byte sequences (non-canonical WTF-8), so two NativePath byte strings can reach the same file. A strict decoder would keep the catalog's BLOB keys unique.
+- [ ] Includes (from 0.1-T4): `native_path.hpp` uses `std::move` without `#include <utility>`.
+- [ ] Windows listing (from 0.1-T4): `list_dir` checks that a folder is not a link through a handle, then enumerates by path with FindFirstFileExW; enumerating through the handle (`GetFileInformationByHandleEx` with FileIdBothDirectoryInfo) closes the gap.
+- [ ] CI on GitHub (from 0.1-T4): the test 'relative paths and drive roots work' asserts `media != Media::unknown` for C:\, which the windows-2025 runner's virtual disk may not answer. Check on the first CI run after 0.1-T4.
+- [ ] CI timing (from 0.1-T5): the 100k-row writer test takes about 1.3 s on carbon against the 2 s limit (about 0.8 s on Windows), so it may get flaky on a loaded CI runner.
+
 ## How to work through this plan
 
 **One task = one fresh session = one commit.** Run `/clear` between tasks.
@@ -161,6 +176,9 @@ The `docker compose run ...` commands in the task cards run on carbon, through `
     - rescanning an unchanged 10k-file tree reads no file contents (a read counter is asserted)
     - `sheepdog-cli hash` matches the BLAKE3 reference vectors, and scanning 200k files keeps memory flat
     - a protected root is refused, and a file flagged as cloud-only is cataloged but never opened (test with a fake platform layer)
+  - Review notes (from 0.1-T4):
+    - `FileReader::open` on Windows follows reparse points and does not check for recall. Open with FILE_FLAG_OPEN_REPARSE_POINT and check the attributes after opening (GetFileInformationByHandleEx): refuse a name-surrogate reparse point or a file with RECALL_* set, so a path that became a link or a placeholder after the listing is never read through or recalled.
+    - `FileReader::open` on Linux uses plain O_RDONLY, so an entry swapped for a FIFO after the listing blocks for ever. Open with O_NONBLOCK, check `fstat` for S_ISREG, then clear O_NONBLOCK.
 - [ ] **0.1-T8 GUI shell: library and activity** (M; effort medium; after: 0.1-T7)
   - Scope: In: main window (menus, docks, layout saved with QSettings, light/dark following the system); Library dock (roots with online/offline state); Add Folders (port of Bloodhound's IFileOpenDialog multi-select on Windows, QFileDialog elsewhere); Scan and Stop; Activity bar polling the progress snapshot every 150 ms; About dialog (version, licences). Out: the file table.
   - Done when:

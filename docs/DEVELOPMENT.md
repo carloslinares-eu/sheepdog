@@ -106,9 +106,10 @@ Host carbon
 
 Uncommitted work is tested without pushing: the working tree is packed with `tar` into a temporary
 file (excluding `.git`, `build*` and `cmake-build-*`), copied with `scp` to carbon and unpacked into
-`~/Workspace/sheepdog`. Never pipe tar through ssh in Windows PowerShell 5.1: its pipeline corrupts binary
+`~/Workspace/sheepdog-ci`, which each run replaces. `~/Workspace/sheepdog` is a plain git clone that
+the scripts leave alone. Never pipe tar through ssh in Windows PowerShell 5.1: its pipeline corrupts binary
 data. From task 0.1-T3, `scripts\linux-test.ps1 <service>` does this and then runs
-`docker compose run --rm <service>` from `compose.yaml` with the image `docker/ci.Dockerfile`
+`docker compose -p sheepdog run --rm <service>` from `compose.yaml` with the image `docker/ci.Dockerfile`
 (services `test`, `asan`, `tsan`, `tidy`, `shell`). Build with `-j4` and run the heavy jobs (TSan,
 fuzzing, AppImage) one at a time.
 
@@ -116,8 +117,8 @@ To repeat tests without a rebuild, for example to catch a rare race, run them in
 service on carbon. It sees the same build volume as the other services:
 
 ```sh
-cd ~/Workspace/sheepdog
-docker compose run --rm -T shell ctest --test-dir /build/linux-tsan -R "queue cap" --repeat until-fail:20
+cd ~/Workspace/sheepdog-ci
+docker compose -p sheepdog run --rm -T shell ctest --test-dir /build/linux-tsan -R "queue cap" --repeat until-fail:20
 ```
 
 Pinning a run to one CPU (`taskset -c 0`) forces other thread orders and finds timing bugs far

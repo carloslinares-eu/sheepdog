@@ -26,7 +26,8 @@ scripts\test.ps1 -Preset win-ci        # -Werror, as CI
 - Running a built exe by hand needs the toolchain on PATH: `. scripts\env.ps1` first.
 - Catch2 tags are ctest labels: `unit fs gui fault slow win linux`. GUI tests run offscreen.
 - Linux: build and test only inside containers on `ssh carbon` (Debian 13, 4 CPUs, no cmake/Qt on
-  the host), in `~/Workspace/sheepdog`. Copy the tree with tar to a temp file + scp; never pipe binary
+  the host), in `~/Workspace/sheepdog-ci`, a scratch copy replaced on every run (`~/Workspace/sheepdog`
+  is a git clone the scripts leave alone). Copy the tree with tar to a temp file + scp; never pipe binary
   data through PowerShell. `scripts\linux-test.ps1 [test|asan|tsan|tidy]` does all that and runs the
   compose service (`compose.yaml`, image `docker/ci.Dockerfile`: GCC 14, Clang 19, Qt 6.8); full log in
   `~/Workspace/sheepdog-<service>.log` on carbon.

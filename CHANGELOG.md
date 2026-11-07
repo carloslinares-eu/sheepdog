@@ -19,3 +19,4 @@ Release tags are named `sheepdog-X.Y.Z`.
 ### Fixed
 - A sanitizer report in the Linux containers no longer stalls for many minutes: `compose.yaml` caps the file descriptor limit, which the sanitizers walk through before starting their symbolizer (0.1-T6).
 - A running job no longer shows an ETA of 0 when its current step has no total, or measures something other than the finished steps: the ETA is unknown or follows the step instead (0.1-T6).
+- `scripts/linux-test.ps1` no longer replaces `~/Workspace/sheepdog` on carbon, which is now a git clone: it copies the tree to `~/Workspace/sheepdog-ci` and keeps the `sheepdog` compose project, so the build and vcpkg volumes stay.

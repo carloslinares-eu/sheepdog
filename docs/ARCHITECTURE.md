@@ -277,8 +277,10 @@ auto job = runner.start("Hash", JobKind::read_only, [&](JobContext& context) -> 
   added up into one entry, which leaves the window as a whole, so the window holds about 50 entries
   at most and a steady stream reads up to 2 % low. `begin_step()` starts the speed over, because
   the next step may run at a very different pace. `eta` is (total - done) / speed for the whole job,
-  `step_left` the same for the step: in bytes when that total has bytes, else in files. Both are
-  empty while the total or the speed is 0, and 0 when nothing is left. A completed job shows 0 for
+  `step_left` the same for the step: in bytes when that total has bytes, else in files. Without
+  `set_job_total()`, `eta` is `step_left`, because finished work is no total for what the current
+  step measures; with it, `eta` counts in bytes only if the job total has bytes. Both are empty
+  while the total or the speed is 0, and 0 when nothing is left. A completed job shows 0 for
   both, a cancelled or failed one neither. `elapsed` runs from the job's start to its end. A total
   of 0 means "not known". Times are `Seconds`, a `duration<double>`.
 - **Clock.** `Clock::now()` -> steady time point, called from several threads at once.

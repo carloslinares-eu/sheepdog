@@ -60,6 +60,8 @@ struct Snapshot {
     Seconds elapsed{0}; // since the job started; stands still once it has ended
     // Time left at the current speed: `eta` for the whole job, `step_left` for the step. Counted
     // in bytes when the total has bytes, else in files. Empty while the total or the speed is 0.
+    // Without set_job_total(), `eta` is `step_left`: work of finished steps is no total for what
+    // the current step measures. With it, `eta` counts in bytes only if the job total has bytes.
     // Both are 0 once a job has completed and empty once it was cancelled or failed.
     std::optional<Seconds> eta;
     std::optional<Seconds> step_left;

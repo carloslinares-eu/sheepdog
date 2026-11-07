@@ -125,8 +125,15 @@ void Progress::publish(Clock::TimePoint now) const {
     next->files_per_second = rates.files;
     next->elapsed = now - start_;
     if (state_ == JobState::running) {
-        next->eta = time_left(next->done, next->total, rates);
         next->step_left = time_left(next->step_done, next->step_total, rates);
+        // Bytes of finished steps say nothing about what is left, unless the job gave a total for
+        // them. Without any job total, what is left of the job is what is left of the step.
+        next->eta = job_total_ == Work{}
+                        ? next->step_left
+                        : time_left(next->done,
+                                    {.files = next->total.files,
+                                     .bytes = job_total_.bytes > 0 ? next->total.bytes : 0},
+                                    rates);
     } else if (state_ == JobState::completed) {
         next->eta = Seconds(0);
         next->step_left = Seconds(0);

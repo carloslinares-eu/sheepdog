@@ -250,6 +250,46 @@ TEST_CASE("a job total never falls below what the steps add up to", "[unit]") {
     CHECK(progress.snapshot()->total == bytes(5000));
 }
 
+TEST_CASE("finished work is no total for what a later step measures", "[unit]") {
+    FakeClock clock;
+    Progress progress(clock);
+
+    SECTION("a later step without a total leaves the ETA unknown") {
+        progress.begin_step("Copying", bytes(1000));
+        work_for(clock, progress, 2, bytes(500));
+        progress.begin_step("Verifying");
+        work_for(clock, progress, 1, bytes(500));
+        const auto snapshot = progress.snapshot();
+        CHECK(snapshot->bytes_per_second == Approx(500));
+        CHECK_FALSE(snapshot->eta.has_value());
+        CHECK_FALSE(snapshot->step_left.has_value());
+    }
+
+    SECTION("a later step counted in files gets an ETA in files") {
+        progress.begin_step("Copying", bytes(1000));
+        work_for(clock, progress, 2, bytes(500));
+        progress.begin_step("Tagging", files(10));
+        work_for(clock, progress, 2, files(2));
+        const auto snapshot = progress.snapshot();
+        REQUIRE(snapshot->eta.has_value());
+        REQUIRE(snapshot->step_left.has_value());
+        CHECK(snapshot->eta->count() == Approx(3));
+        CHECK(snapshot->step_left->count() == Approx(3));
+    }
+
+    SECTION("a job total in files stays counted in files") {
+        progress.set_job_total(files(10));
+        progress.begin_step("Copying", bytes(1000));
+        work_for(clock, progress, 2, {.files = 1, .bytes = 500});
+        progress.begin_step("Verifying");
+        work_for(clock, progress, 2, files(1));
+        const auto snapshot = progress.snapshot();
+        REQUIRE(snapshot->eta.has_value());
+        CHECK(snapshot->eta->count() == Approx(6));
+        CHECK_FALSE(snapshot->step_left.has_value());
+    }
+}
+
 TEST_CASE("a finished job stands still", "[unit]") {
     FakeClock clock;
     Progress progress(clock);

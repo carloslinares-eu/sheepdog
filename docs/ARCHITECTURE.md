@@ -50,13 +50,22 @@ src/core/      sheepdog_core (no Qt)
     backup.hpp       backup_catalog, list_backups, newest_backup, backup_stamp
     catalog.hpp      open_catalog, open_catalog_read_only, check_integrity, check_catalog_location
     writer.hpp       CatalogWriter (the DB-writer thread), FileRow
+  jobs/          the job framework (Qt-free, no #ifdef)
+    clock.hpp        Clock, system_clock()
+    errors.hpp       JobErrc + job_category(), ErrorLog, catch_exceptions()
+    chunks.hpp       kChunkSize, ChunkSource, read_chunks()
+    progress.hpp     Work, JobState, Snapshot, SpeedWindow, Progress
+    pool.hpp         BoundedPool, TaskGroup, volume_limit(), default_worker_count()
+    job.hpp          JobKind, JobContext, JobBody, FileChangeLock, Job, JobRunner
 src/cli/       sheepdog-cli (main.cpp: --version, --help)
 src/gui/       sheepdog_gui + sheepdog (MainWindow, window_title())
 tests/         Catch2 tests (platform_win_test.cpp only on Windows, platform_linux_test.cpp
-               only on Linux; catalog_test.cpp, catalog_writer_test.cpp on both)
+               only on Linux; catalog_*_test.cpp and jobs_*_test.cpp on both)
   support/temp_tree.hpp  TempDir (unique folder under the system temp, removed without
                          following links), make_dir, write_file, rename_path, make_dir_link
                          (symlink / junction), remove_tree; native calls, NativePath names
+  support/jobs_support.hpp  FakeClock, eventually() (wait for another thread), Gate, volume(uid,
+                         media), start_job()
 cmake/         CMake helpers, Windows resources, CMakeUserPresets template
 scripts/       env.ps1, build.ps1, test.ps1, check-env.ps1 (Windows PowerShell 5.1)
 docs/          DESIGN, RELEASE_PLAN, ARCHITECTURE, DEVELOPMENT, USER_GUIDE, CONTRIBUTING
@@ -179,6 +188,106 @@ refusals use `CatalogErrc` (`corrupt`, `network_location`, `newer_schema`, `not_
   transactions, failed items. The destructor commits what is queued, then joins.
   100k rows take about 0.8 s (Windows Release) and 1.3 s (carbon container, Release).
 
+### core/jobs (0.1-T6)
+
+Namespace `sheepdog::jobs`: the framework around long-running work. Concrete jobs (scan, hash,
+apply) arrive with their subjects. Failures are `platform::Result<T>`; the framework's own codes
+are `JobErrc` (`cancelled`, `busy`, `exception`) in `job_category()`, comparable as
+`error.code == JobErrc::busy`.
+
+```cpp
+JobRunner runner;
+auto job = runner.start("Hash", JobKind::read_only, [&](JobContext& context) -> Result<void> {
+    context.progress().begin_step("Hashing", {.files = files.size(), .bytes = total});
+    auto tasks = context.tasks(); // after what the tasks use: its destructor waits for them
+    for (const File& file : files) {
+        const bool queued = tasks.submit(file.volume, [&context, &file]() -> Result<void> {
+            auto reader = FileReader::open(file.path);
+            if (!reader) {
+                return reader.error(); // goes into the job's ErrorLog; the job carries on
+            }
+            Hasher hasher;
+            auto read = read_chunks(*reader, context.stop_token(), [&](auto chunk) -> Result<void> {
+                hasher.update(chunk);
+                context.progress().add({.files = 0, .bytes = chunk.size()});
+                return Ok{};
+            });
+            ...
+        });
+        if (!queued) {
+            break; // stopped
+        }
+    }
+    return Ok{};
+});
+```
+
+- **Jobs.** `JobRunner(clock = system_clock(), workers = default_worker_count())` starts jobs and
+  owns the pool they share; one per application is enough, and the clock must outlive it.
+  `start(name, kind, body)` -> `Result<shared_ptr<Job>>` runs
+  `JobBody = Result<void>(JobContext&)` on a `std::jthread` of its own. The destructor stops the
+  jobs still running and waits for them. Finished jobs are dropped at the next `start()`, but a
+  `Job` handle stays valid for as long as it is held. `Job`: `name()`, `kind()`, `snapshot()`,
+  `errors()`, `request_stop()` (does not wait), `wait()` (any number of times, from any thread but
+  the job's own), which says how it ended: Ok, a `JobErrc::cancelled` error, or the body's error.
+- **How a job ends.** `Snapshot::state` goes from `running` to `completed`, `cancelled` or `failed`.
+  An error return or an exception (`JobErrc::exception`, with `what()` as detail) means failed and
+  goes into the log as well. A body that returns Ok after a stop was requested counts as cancelled,
+  as does one returning `JobErrc::cancelled`; an error wins over a stop. Errors of single files do
+  not fail a job, so `completed` can come with a non-empty log. When the state is no longer
+  `running`, the tasks are done and the file-change lock is free.
+- **JobContext.** `stop_token()`, `stop_requested()`, `progress()`, `errors()`, `tasks()`. Its
+  accessors may be called from the job's pool tasks. Jobs check for a stop per item, and per
+  chunk with `read_chunks()`.
+- **File-change lock.** `JobKind::changes_files` jobs hold `FileChangeLock`, a process-wide flag, so
+  a second `JobRunner` cannot get around it; `read_only` jobs do not take it. While one runs,
+  `start()` refuses another with `JobErrc::busy` rather than queueing it: its plan was checked
+  against the disk as it is now, and a double click must not run a batch twice. A second Sheepdog
+  process is not covered.
+- **Pool.** `BoundedPool(workers)`: worker threads shared by all jobs, so that the limits hold
+  across jobs. `queue_capacity()` is workers x `kQueuePerWorker` (4) waiting tasks; a producer
+  blocks beyond that, so memory stays flat. At most `volume_limit(media)` tasks of one volume run at
+  a time (`kHddLimit` 2, `kSsdLimit` 8; unknown counts as an HDD). The queue is one FIFO: a worker
+  takes the first task whose volume has a free slot. So a volume at its limit holds back only its
+  own tasks, though a slow volume can still fill the shared queue and slow down the producers of
+  the others. `stats()`: `queued`, `running`, `peak_queued`, `completed` (`running` and `completed`
+  trail `TaskGroup::wait()` by a moment).
+- **TaskGroup.** `TaskGroup(pool, stop, errors)`, or `context.tasks()`, is how work enters the pool.
+  `submit(VolumeInfo, Task)` with `Task = Result<void>()` blocks while the queue is full and returns
+  false once a stop was requested, also while blocked. A failing or throwing task goes into the log.
+  After a stop, queued tasks are skipped; running ones must check the token themselves. `wait()`
+  blocks until the group's tasks are over and their captures destroyed; the destructor waits too,
+  so declare the group after what its tasks use, and an early return is safe. A task must not
+  submit tasks: with every worker waiting for room in the queue nothing would make room.
+- **Chunks.** `read_chunks(source, stop, sink)` reads any `ChunkSource` (`FileReader`, a fake) to its
+  end in chunks of `kChunkSize` (1 MiB), passes each to `sink(span<const byte>)` -> `Result<void>`,
+  and returns the bytes read. The token is checked before every read, so a stop takes effect within
+  one chunk: the chunk under way is delivered, the next one is not read, and the result is
+  `JobErrc::cancelled`.
+- **Progress.** `Progress(clock)`, reached through `context.progress()`. A job is a series of steps,
+  each with a phase name and totals: `begin_step(phase, total)`, `add_total(work)` when a step finds
+  more, `set_job_total(total)` for a job that knows its later steps; without that, the job's total
+  is the work of finished steps plus the current step's total. `add(Work{files, bytes})` reports
+  finished work from any thread. `snapshot()` builds a `Snapshot`, swaps it into the
+  `shared_ptr<const Snapshot>` under the mutex and returns that, so a job that stalls still shows
+  its speed falling; `add()` never builds one. After `finish(state)`, which the runner calls, the
+  snapshot is frozen.
+- **The maths.** Speed = the work added in the last `kSpeedWindow` (5 s) of the current step, divided
+  by 5 s, or by the step's age while that is shorter. Work within `kSpeedResolution` (100 ms) is
+  added up into one entry, which leaves the window as a whole, so the window holds about 50 entries
+  at most and a steady stream reads up to 2 % low. `begin_step()` starts the speed over, because
+  the next step may run at a very different pace. `eta` is (total - done) / speed for the whole job,
+  `step_left` the same for the step: in bytes when that total has bytes, else in files. Both are
+  empty while the total or the speed is 0, and 0 when nothing is left. A completed job shows 0 for
+  both, a cancelled or failed one neither. `elapsed` runs from the job's start to its end. A total
+  of 0 means "not known". Times are `Seconds`, a `duration<double>`.
+- **Clock.** `Clock::now()` -> steady time point, called from several threads at once.
+  `system_clock()` is the real one; `test::FakeClock` (`tests/support/jobs_support.hpp`) moves only
+  when a test says so.
+- **Errors.** `ErrorLog` is thread-safe: `add(error)` ignores `JobErrc::cancelled`, keeps the first
+  `kKeptErrors` (1000) and counts them all; `count()`, `kept()`. `catch_exceptions(fn)` wraps every
+  body and task, so no exception crosses a thread.
+
 ### gui/main_window.hpp
 
 - `sheepdog::gui::window_title()`: `"Sheepdog " + version()`.
@@ -217,5 +326,11 @@ Tag, rule, layout, batch/op (journal) and FTS tables arrive with later migration
   The mutex guards the queue, the error slot and the stats only; SQLite runs outside it.
 - **Readers**: each reading thread opens its own `open_catalog_read_only()` connection (WAL lets
   readers run while the writer commits). A connection is used by one thread at a time.
-- Planned (DESIGN.md, "Architecture"): GUI thread, one `std::jthread` per job, a bounded worker
-  pool, a query thread.
+- **Jobs** (0.1-T6): one `std::jthread` per job runs its body; a stop comes through that thread's
+  `stop_token`. Only one `changes_files` job runs at a time in the process.
+- **Worker pool** (0.1-T6): one `BoundedPool` per `JobRunner`, shared by all its jobs. Job threads
+  are the producers and block while the queue is full; a stop wakes them. The mutex guards the
+  queue and the counters; tasks run outside it.
+- **Progress** (0.1-T6): workers add work under `Progress`'s mutex (arithmetic only). A poller calls
+  `Job::snapshot()` from any thread and may keep the immutable `Snapshot` it gets.
+- Planned (DESIGN.md, "Architecture"): GUI thread, a query thread.

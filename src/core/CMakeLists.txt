@@ -18,6 +18,17 @@ add_library(sheepdog_core STATIC
     catalog/catalog.cpp
     catalog/writer.hpp
     catalog/writer.cpp
+    jobs/clock.hpp
+    jobs/clock.cpp
+    jobs/errors.hpp
+    jobs/errors.cpp
+    jobs/chunks.hpp
+    jobs/progress.hpp
+    jobs/progress.cpp
+    jobs/pool.hpp
+    jobs/pool.cpp
+    jobs/job.hpp
+    jobs/job.cpp
     "${SHEEPDOG_VERSION_CPP}")
 add_library(sheepdog::core ALIAS sheepdog_core)
 add_dependencies(sheepdog_core sheepdog_version_info)

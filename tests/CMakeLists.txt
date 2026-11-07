@@ -12,6 +12,11 @@ add_executable(sheepdog_tests
     platform_fs_test.cpp
     catalog_test.cpp
     catalog_writer_test.cpp
+    jobs_progress_test.cpp
+    jobs_pool_test.cpp
+    jobs_job_test.cpp
+    jobs_chunks_test.cpp
+    support/jobs_support.hpp
     support/temp_tree.hpp
     support/temp_tree.cpp)
 if(WIN32)

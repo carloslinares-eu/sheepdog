@@ -38,6 +38,8 @@ Optional notes from the task reviews that no task card covers yet. Fold each int
 - [ ] Windows listing (from 0.1-T4): `list_dir` checks that a folder is not a link through a handle, then enumerates by path with FindFirstFileExW; enumerating through the handle (`GetFileInformationByHandleEx` with FileIdBothDirectoryInfo) closes the gap.
 - [ ] CI on GitHub (from 0.1-T4): the test 'relative paths and drive roots work' asserts `media != Media::unknown` for C:\, which the windows-2025 runner's virtual disk may not answer. Check on the first CI run after 0.1-T4.
 - [ ] CI timing (from 0.1-T5): the 100k-row writer test takes about 1.3 s on carbon against the 2 s limit (about 0.8 s on Windows), so it may get flaky on a loaded CI runner.
+- [ ] File-change lock (from 0.1-T6): `FileChangeLock` covers one process, so `sheepdog-cli apply` can still run next to the GUI's own batch. The executor (v0.2) needs a lock across processes as well, for example a lock file next to the catalog.
+- [ ] Shared queue (from 0.1-T6): all volumes share the queue of workers x 4 tasks, so a slow HDD can fill it and hold the producer of a fast SSD back to the HDD's pace. Tasks of the SSD still overtake those of the HDD once they are queued. If jobs on several volumes turn out to run side by side, give each volume a share of the queue (0.8 performance work).
 
 ## How to work through this plan
 
@@ -163,7 +165,7 @@ The `docker compose run ...` commands in the task cards run on carbon, through `
     - migration tests: empty to v1 runs once, can safely run again, and leaves a backup
     - 100k file rows go through the writer in under 2 s (Release build)
     - a corrupted catalog is refused with a clear message offering the newest backup, and a catalog path on a UNC or NFS share is refused
-- [ ] **0.1-T6 Job framework** (M; effort high; after: 0.1-T3)
+- [x] **0.1-T6 Job framework** (M; effort high; after: 0.1-T3)
   - Scope: In: job runner on std::jthread + stop_token; BoundedPool (queue capped at workers x 4, limits per volume); progress snapshot (phase, files and bytes done and total, speed over a sliding 5 s window, ETA, elapsed, time left in the step) published as shared_ptr<const Snapshot> swapped under a mutex; injected Clock; error collection; a lock so only one job that changes files runs at a time. Out: concrete jobs.
   - Done when:
     - fake-clock tests for the speed, ETA and time-left maths pass

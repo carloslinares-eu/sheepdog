@@ -38,9 +38,10 @@ scripts\test.ps1 -Preset win-ci        # -Werror, as CI
 | `src/core/` | `sheepdog_core`, the Qt-free engine | `version()` |
 | `src/core/platform/` | OS layer, read side (`*_win.cpp` / `*_posix.cpp`) | `Result<T>`, `NativePath`, `list_dir`, `file_identity`, `volume_info`, `FileReader` |
 | `src/core/catalog/` | SQLite catalog: wrapper, schema v1 + migrations, backups, DB-writer thread | `Database`, `open_catalog`, `migrate`, `CatalogWriter` |
+| `src/core/jobs/` | Job framework: job threads, shared worker pool, progress snapshots, stop-aware chunked reads, file-change lock | `JobRunner`, `Job`, `JobContext`, `TaskGroup`, `BoundedPool`, `Progress`, `Snapshot`, `Clock`, `ErrorLog`, `read_chunks` |
 | `src/cli/` | `sheepdog-cli`, links only the core | `main` |
 | `src/gui/` | `sheepdog_gui` lib + `sheepdog` exe | `gui::MainWindow` |
-| `tests/` | Catch2 tests (`sheepdog_tests`, `sheepdog_gui_tests`) | `test::TempDir` (`tests/support/temp_tree.hpp`) |
+| `tests/` | Catch2 tests (`sheepdog_tests`, `sheepdog_gui_tests`) | `test::TempDir` (`tests/support/temp_tree.hpp`), `test::FakeClock` (`tests/support/jobs_support.hpp`) |
 | `cmake/` | warnings, sanitizers, git version, Windows rc + manifest | |
 | `scripts/` | build, test, env, check-env, linux-test (PowerShell 5.1) | |
 | `docker/`, `compose.yaml` | Linux CI image and services (run on carbon) | |
@@ -53,6 +54,7 @@ scripts\test.ps1 -Preset win-ci        # -Werror, as CI
 - Numbers via `std::from_chars`. No `std::format`, no `<chrono>` time zones (AppImage uses GCC 12).
 - Files under ~500 lines. Every target calls `sheepdog_set_warnings()`; code must build with
   `WARNINGS_AS_ERRORS=ON`.
+- Catch2 assertions are not thread-safe: threads record results in atomics, the test thread checks.
 - Include project headers as `"core/..."`, `"gui/..."` (include root is `src/`).
 - Every change: a line under *Unreleased* in `CHANGELOG.md`; interface changes update
   `docs/ARCHITECTURE.md`.

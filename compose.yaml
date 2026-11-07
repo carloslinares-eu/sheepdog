@@ -13,6 +13,10 @@ x-ci: &ci
     - vcpkg-cache:/vcpkg-cache
   tmpfs:
     - /mnt/xdev:mode=1777
+  ulimits:
+    # A sanitizer report starts the symbolizer after closing every possible file descriptor.
+    # With Docker's default limit of a billion, that alone takes many minutes.
+    nofile: 65536
   environment:
     JOBS: "4"
 

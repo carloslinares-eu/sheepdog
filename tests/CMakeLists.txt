@@ -16,6 +16,7 @@ add_executable(sheepdog_tests
     jobs_pool_test.cpp
     jobs_job_test.cpp
     jobs_chunks_test.cpp
+    support/ci.hpp
     support/jobs_support.hpp
     support/temp_tree.hpp
     support/temp_tree.cpp)

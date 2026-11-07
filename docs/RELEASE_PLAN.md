@@ -40,6 +40,8 @@ Optional notes from the task reviews that no task card covers yet. Fold each int
 - [ ] CI timing (from 0.1-T5): the 100k-row writer test takes about 1.3 s on carbon against the 2 s limit (about 0.8 s on Windows), so it may get flaky on a loaded CI runner.
 - [ ] File-change lock (from 0.1-T6): `FileChangeLock` covers one process, so `sheepdog-cli apply` can still run next to the GUI's own batch. The executor (v0.2) needs a lock across processes as well, for example a lock file next to the catalog.
 - [ ] Shared queue (from 0.1-T6): all volumes share the queue of workers x 4 tasks, so a slow HDD can fill it and hold the producer of a fast SSD back to the HDD's pace. Tasks of the SSD still overtake those of the HDD once they are queued. If jobs on several volumes turn out to run side by side, give each volume a share of the queue (0.8 performance work).
+- [ ] Stop wording (from 0.1-T6): the comment on `TaskGroup::submit` says it returns false once a stop was requested, but a stop that lands just before the wait in `BoundedPool::submit` can still queue the task and return true. This is harmless, because the task is skipped and `wait()` stays correct; only the comment is too strong.
+- [ ] HDD limit test (from 0.1-T6): 'tasks of one volume stay within its limit' asserts peak <= limit only, and the exact limit has a test of its own only for SSDs ('an SSD gets eight tasks'). Nothing asserts directly that an HDD volume reaches 2 under load; 'a volume at its limit holds back only its own tasks' covers it indirectly.
 
 ## How to work through this plan
 
